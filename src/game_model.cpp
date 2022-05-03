@@ -21,11 +21,12 @@ Game::Game(const std::vector<std::vector<int>> &start_state)
 }
 //////////////////////////////////////////////////////////////
 
-bool Game::is_goal(const vertex *game_state) const {
+bool Game::is_goal(const vertex_ptr game_state) const {
   return m_goal_state == game_state->state();
 }
 
-std::vector<vertex *> Game::get_neighbours(const vertex *game_state) const {
+std::vector<vertex_ptr>
+Game::get_neighbours(const vertex_ptr &game_state) const {
   int zr = 0;
   int zc = 0; // zero row and col
   for (int r = 0; r < m_field_size; ++r) {
@@ -41,7 +42,7 @@ std::vector<vertex *> Game::get_neighbours(const vertex *game_state) const {
   const int delta_r[] = {-1, 0, 1, 0};
   const int delta_c[] = {0, -1, 0, 1};
 
-  std::vector<vertex *> res;
+  std::vector<vertex_ptr> res;
   res.reserve(4);
   for (int k = 0; k < 4; k++) {
     int nr = zr + delta_r[k];
@@ -49,7 +50,7 @@ std::vector<vertex *> Game::get_neighbours(const vertex *game_state) const {
     if (nr < 0 || nc < 0 || nr >= m_field_size || nc >= m_field_size)
       continue;
 
-    vertex *nVertex = new vertex(game_state);
+    vertex_ptr nVertex = std::make_shared<vertex>(game_state);
     (*nVertex)(nr, nc) = 0;
     (*nVertex)(zr, zc) = (*game_state)(nr, nc);
     nVertex->set_tile((*game_state)(nr, nc));
@@ -60,13 +61,13 @@ std::vector<vertex *> Game::get_neighbours(const vertex *game_state) const {
 //////////////////////////////////////////////////////////////////////////
 
 void Game::a_star_add_neighbours(
-    const vertex *game_state, std::set<vertex *, VertexSetComparator> &visited,
-    std::priority_queue<vertex *, std::deque<vertex *>, VertexQueueSorter>
+    const vertex_ptr &game_state,
+    std::set<vertex_ptr, VertexSetComparator> &visited,
+    std::priority_queue<vertex_ptr, std::deque<vertex_ptr>, VertexQueueSorter>
         &vrtx_queue) {
   auto neighbours = get_neighbours(game_state);
   for (auto nVertex : neighbours) {
     if (visited.find(nVertex) != visited.end()) {
-      delete nVertex;
       continue;
     }
     nVertex->recalculate_heuristics();
@@ -80,20 +81,15 @@ std::vector<int> Game::find_solution_a_star() {
     return std::vector<int>({0});
   }
 
-  std::priority_queue<vertex *, std::deque<vertex *>, VertexQueueSorter>
+  std::priority_queue<vertex_ptr, std::deque<vertex_ptr>, VertexQueueSorter>
       vrtx_queue;
-  std::set<vertex *, VertexSetComparator> visited;
-  vertex *start_vrtx = new vertex(m_start_state);
+  std::set<vertex_ptr, VertexSetComparator> visited;
+  vertex_ptr start_vrtx = std::make_shared<vertex>(m_start_state);
   vrtx_queue.push(start_vrtx);
   visited.insert(start_vrtx);
 
-  defer d_visited(nullptr, [&visited](...) {
-    for (auto &it : visited)
-      delete it;
-  });
-
   while (!vrtx_queue.empty()) {
-    vertex *top_v = vrtx_queue.top();
+    vertex_ptr top_v = vrtx_queue.top();
     vrtx_queue.pop();
     if (!is_goal(top_v)) {
       a_star_add_neighbours(top_v, visited, vrtx_queue);
@@ -105,7 +101,7 @@ std::vector<int> Game::find_solution_a_star() {
 }
 //////////////////////////////////////////////////////////////
 
-std::pair<int, vertex *> Game::ida_star_search(vertex *vrtx, int bound) {
+std::pair<int, vertex_ptr> Game::ida_star_search(vertex_ptr vrtx, int bound) {
   vrtx->recalculate_heuristics();
   int f = vrtx->heuristics() + vrtx->cost();
   if (f > bound) {
@@ -117,21 +113,16 @@ std::pair<int, vertex *> Game::ida_star_search(vertex *vrtx, int bound) {
   }
 
   int min = std::numeric_limits<int>::max();
-  std::vector<vertex *> neighbours = get_neighbours(vrtx);
+  std::vector<vertex_ptr> neighbours = get_neighbours(vrtx);
   for (auto &n : neighbours) {
     auto r = ida_star_search(n, bound);
     if (r.second != nullptr) {
-      for (auto &nn : neighbours) {
-        if (n != nn) delete nn;
-      }
       return r;
     }
-    if (r.first < min)
+    if (r.first < min) {
       min = r.first;
+    }
   }
-
-  for (auto &n : neighbours)
-    delete n;
   return std::make_pair(min, nullptr);
 }
 //////////////////////////////////////////////////////////////////////////
@@ -141,20 +132,13 @@ std::vector<int> Game::find_solution_ida_star() {
     return std::vector<int>({0});
   }
 
-  const vertex *solution_node = nullptr;
-  vertex *root = new vertex(m_start_state); // not shared ptr, see d_path
-  defer d_path(nullptr, [&solution_node](...) {
-    while (solution_node != nullptr) {
-      const vertex *tmp = solution_node;
-      solution_node = solution_node->parent();
-      delete tmp;
-    }
-  });
+  vertex_ptr solution_node = nullptr;
+  vertex_ptr root = std::make_shared<vertex>(m_start_state);
 
   root->recalculate_heuristics();
   int bound = root->heuristics() /*+ root->cost(), but cost is zero here*/;
   while (solution_node == nullptr) {
-    std::pair<int, vertex *> t = ida_star_search(root, bound);
+    std::pair<int, vertex_ptr> t = ida_star_search(root, bound);
     if (t.second != nullptr) {
       solution_node = t.second;
     }
@@ -164,13 +148,14 @@ std::vector<int> Game::find_solution_ida_star() {
 }
 //////////////////////////////////////////////////////////////////////////
 
-std::vector<int> Game::decision_states(const vertex *goal_vrtx) const {
+std::vector<int> Game::decision_states(const vertex_ptr &goal_vrtx) const {
   if (goal_vrtx == nullptr)
     return std::vector<int>({0});
   std::vector<int> res;
-  while (goal_vrtx && goal_vrtx->parent() != nullptr) {
-    res.push_back(goal_vrtx->tile());
-    goal_vrtx = goal_vrtx->parent();
+  const vertex *g = goal_vrtx.get();
+  while (g && g->parent() != nullptr) {
+    res.push_back(g->tile());
+    g = g->parent().get();
   }
   std::reverse(res.begin(), res.end());
   return res;

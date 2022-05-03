@@ -3,10 +3,10 @@ CONFIG += console c++20
 CONFIG -= app_bundle
 CONFIG -= qt
 
-QMAKE_CXXFLAGS += -Wall -Wextra -pedantic
+QMAKE_CXXFLAGS += -Wall -Wextra -pedantic -fopenmp
 
 INCLUDEPATH += inc \
-
+LIBS += -lgomp
 
 SOURCES += \
         main.cpp \
