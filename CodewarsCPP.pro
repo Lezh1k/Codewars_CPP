@@ -11,11 +11,13 @@ LIBS += -lgomp
 SOURCES += \
         main.cpp \
         src/blocks_number.cpp \
+        src/queens.cpp \
         src/vertex.cpp \
         src/game_model.cpp
 
 HEADERS += \
     inc/blocks_number.h \
+    inc/queens.h \
     inc/vetex.h \
     inc/game_model.h \
     inc/game.hpp
