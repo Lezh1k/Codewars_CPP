@@ -16,14 +16,10 @@ std::vector<std::string> split_lines(const std::string &str,
 std::string join_lines(const std::vector<std::string> &lst,
                        const char separator = '\n');
 
-
-
-
 int32_t main(int32_t, char **) {
-  chess_board g(5, 0, 0);
-  std::cout << std::boolalpha << g.find_solution_backtrack() << std::endl;
-  std::cout << g.to_string() << std::endl;
-
+  std::srand(std::time(nullptr)); // use current time as seed for random generator
+  chess_board g(664, 378, 396);
+  std::cout << std::boolalpha << g.find_solution(300) << std::endl;
   return 0;
 
   std::string &&input = join_lines(

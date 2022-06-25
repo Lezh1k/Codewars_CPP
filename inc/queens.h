@@ -4,7 +4,6 @@
 #include <vector>
 #include <string>
 
-
 class chess_board {
 private:
   int m_field_size;
@@ -12,26 +11,23 @@ private:
   int m_init_queen_col;
   std::vector<bool> m_board;
 
-  /*backtracking*/
-  std::vector<bool> m_used_rows;
-  std::vector<bool> m_used_cols;
-  std::vector<bool> m_used_diag_slash;
-  std::vector<bool> m_used_diag_backslash;
-  void set_queen_state(int row, int col, bool is_set);
-  bool coordinate_is_safe(int row, int col) const;
-  bool backtracking_bruteforce(int col);
-
-  /*min conflicts*/
-  static const int VAL_IN_COL_IS_NOT_SET = -1;
+  static const int NOT_SET;
   std::vector<int> m_cols;
-  int attacks_count(int row, int col) const;
+  void set_queen_state(int row, int col, bool state);
+
+  void rows_with_min_conflicts(int col, std::vector<int> &res) const;
+  int conflicts_count(int row, int col) const;
+  bool is_goal_state() const;
 
 public:
   explicit chess_board(int N);
   chess_board(int N, int initial_row, int initial_col);
 
   std::string to_string() const;
-  bool find_solution_backtrack();
+  bool find_solution(int max_depth = 10000);
+
+  //debug!
+  friend std::ostream& operator<<(std::ostream& out, const chess_board& v);
 };
 
 #endif // QUEENS_H
