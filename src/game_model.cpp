@@ -120,7 +120,7 @@ Game::move_empty_cell(vertex &vrtx,
   std::vector<int32_t> res;
   res.reserve(path.size());
 
-  for (auto &zp : path) {
+  for (auto const &zp : path) {
     int dr = vrtx.zero_point().row - zp.row;
     int dc = vrtx.zero_point().col - zp.col;
 
