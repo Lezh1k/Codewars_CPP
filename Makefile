@@ -15,17 +15,21 @@ WARN_LEVEL = -Wall -Wextra -pedantic
 PRG = codewars_cpp
 INCLUDES = -Iinc
 CXXFLAGS := $(INCLUDES) $(DEFS) $(WARN_LEVEL) -pipe -O0 -g -std=gnu++2a
-debug: CXXFLAGS += -O0 -g3
+debug: CXXFLAGS += -O0 -ggdb
 debug: all
 release: CXXFLAGS += -O2
 release: all
 
 LDFLAGS = $(LIBS)
 
-SRC_C := $(wildcard *.cpp) $(wildcard src/*.cpp)
+SRC_C := $(wildcard src/*.cpp)
 
 OBJECTS := $(SRC_C:%.cpp=$(OBJ_DIR)/%.o)
 all: directories $(PRG)
+
+.PHONY: run
+run: all
+	$(BIN_DIR)/$(PRG).elf
 
 $(PRG): $(BIN_DIR)/$(PRG)
 $(OBJ_DIR)/%.o: %.cpp
