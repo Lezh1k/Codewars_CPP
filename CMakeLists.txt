@@ -6,6 +6,7 @@ project(CodewarsCPP)            # this sets the project name
 ## file globbing ##############################################################
 ###############################################################################
 
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 # These instructions search the directory tree when cmake is
 # invoked and put all files that match the pattern in the variables 
 # `sources` and `data`.
@@ -65,7 +66,7 @@ if(GTEST_FOUND)
   # This define is added to prevent collision with the main.
   # It might be better solved by not adding the source with the main to the
   # testing target.
-  target_compile_definitions(unit_tests PUBLIC UNIT_TESTS)
+  target_compile_definitions(unit_tests PUBLIC _UNIT_TESTS_)
 
   # This allows us to use the executable as a link library, and inherit all 
   # linker options and library dependencies from it, by simply adding it as dependency.
@@ -101,7 +102,6 @@ install(DIRECTORY resources DESTINATION codewars_cpp_destination)
 # be minimal here.
 set(CPACK_PACKAGE_NAME "MyExample")
 set(CPACK_PACKAGE_VERSION "1.0.0")
-
 # We don't want to split our program up into several incomplete pieces.
 set(CPACK_MONOLITHIC_INSTALL 1)
 

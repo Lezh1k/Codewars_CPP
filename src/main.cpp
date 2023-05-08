@@ -2,6 +2,8 @@
 #include <cstdlib>
 #include <iostream>
 #include <vector>
+
+#include <gtest/gtest.h>
 /*
 *** Lift Rules ***
 The Lift only goes up or down!
@@ -36,10 +38,8 @@ private:
 
 public:
   Game(const std::vector<std::vector<int>> &queues, int capacity)
-      : m_lift_capacity(capacity),
-        m_lift_current_floor(0),
-        m_queue_tops(queues.size()) {
-  }
+      : m_lift_capacity(capacity), m_lift_current_floor(0),
+        m_queue_tops(queues.size()) {}
 
   bool next_move() { return false; }
 };
@@ -71,12 +71,24 @@ std::vector<int> the_lift(const std::vector<std::vector<int>> &queues,
 }
 //////////////////////////////////////////////////////////////
 
+#ifdef _UNIT_TESTS_
+int main_tests(int argc, char *argv[]) {
+  testing::InitGoogleTest(&argc, argv);
+  return RUN_ALL_TESTS();
+}
+#endif
+//////////////////////////////////////////////////////////////
+
 int main(int argc, char *argv[]) {
+#ifdef _UNIT_TESTS_
+  return main_tests(argc, argv);
+#else
   for (int i = 0; i < argc; ++i) {
     std::cout << i << ": " << argv[i] << "\n";
   }
   std::vector<std::vector<int>> queues;
   queues = {{}, {}, {5, 5, 5}, {}, {}, {}, {}};
   the_lift(queues, 5);
+#endif
 }
 //////////////////////////////////////////////////////////////
