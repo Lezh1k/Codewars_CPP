@@ -16,6 +16,9 @@ file(GLOB_RECURSE data resources/*)
 # You can use set(sources src/main.cpp) etc if you don't want to
 # use globbing to find files automatically.
 
+find_package( OpenCV REQUIRED )
+include_directories( ${OpenCV_INCLUDE_DIRS} )
+
 ###############################################################################
 ## target definitions #########################################################
 ###############################################################################
@@ -44,10 +47,10 @@ file(COPY ${data} DESTINATION resources)
 # that we need to link into the program.
 # find_package(Boost 1.36.0 COMPONENTS filesystem system REQUIRED)
 
-# target_link_libraries(codewars_cpp PUBLIC
-#   ${Boost_LIBRARIES}
-#   # here you can add any library dependencies
-# )
+target_link_libraries(codewars_cpp PUBLIC
+  ${OpenCV_LIBS}
+  # here you can add any library dependencies
+)
 
 ###############################################################################
 ## testing ####################################################################
