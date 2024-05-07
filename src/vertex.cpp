@@ -2,6 +2,7 @@
 #include <algorithm>
 #include <cassert>
 #include <exception>
+#include <stdexcept>
 
 int vertex::vertex_move_direction_to_delta_row(vertex_move_direction dir) const
 {

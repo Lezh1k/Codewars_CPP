@@ -1,6 +1,9 @@
 #include <assert.h>
 #include <gtest/gtest.h>
 
+#include <cstddef>
+#include <iomanip>
+#include <iostream>
 #include <opencv2/core.hpp>
 #include <opencv2/highgui/highgui.hpp>
 #include <opencv2/imgproc.hpp>
@@ -30,17 +33,11 @@ struct Point {
 
 bool operator<(const Point& p1, const Point& p2)
 {
-  if (abs(p1.x - p2.x) <= EPS) {
-    return p1.y < p2.y;
+  if (std::fabs(p1.x - p2.x) <= EPS) {
+    return std::round(p1.y / EPS) * EPS < std::round(p2.y / EPS) * EPS;
   }
-  return p1.x < p2.x;
+  return std::round(p1.x / EPS) * EPS < std::round(p2.x / EPS) * EPS;
 }
-// clang-format off
-bool operator==(const Point& lhs, const Point& rhs) { return abs(lhs.x - rhs.x) <= EPS && abs(lhs.y - rhs.y) <= EPS; }
-bool operator> (const Point& lhs, const Point& rhs) { return rhs < lhs; }
-bool operator<=(const Point& lhs, const Point& rhs) { return !(lhs > rhs); }
-bool operator>=(const Point& lhs, const Point& rhs) { return !(lhs < rhs); }
-// clang-format on
 //////////////////////////////////////////////////////////////
 
 struct Circle {
@@ -77,6 +74,18 @@ struct LineSegment {
   LineSegment() : a(), b() {}
   LineSegment(Point a, Point b) : a(a), b(b) {}
 };
+
+struct Arc {
+  Point a, b;     // points on circle
+  double r;       // radius
+  double thetha;  // angle between points
+
+  Arc() : a(), b(), r(0.), thetha(0.) {}
+  Arc(Point a, Point b, double r, double thetha)
+      : a(a), b(b), r(r), thetha(thetha)
+  {
+  }
+};
 //////////////////////////////////////////////////////////////
 
 struct Vertex {
@@ -103,17 +112,32 @@ static std::vector<Line> tangences(const Circle& c1, const Circle& c2);
  * */
 static Point intersection_ntc(const Line& l, const Circle& circle);
 
+/**
+ * intersection_lc: finds points of intersection of line and circle
+ * */
 static std::vector<Point> intersection_lc(const Line& l, const Circle& circle);
+
+/**
+ * intersection_cc: finds points of intersection of two circles
+ * */
 static std::vector<Point> intersection_cc(const Circle& c1, const Circle& c2);
 
+static void associate_point_with_circle(
+    const Point& point,
+    size_t c_idx,
+    std::map<size_t, std::set<Point>>& dct_circle_points);
 static bool line_segment_cross_circle(const LineSegment& ls, const Circle& c);
-static void neighbours(const Circle& c1,
-                       int c1_idx,
-                       const std::vector<Circle>& circles,
-                       std::vector<LineSegment>& out_line_segments,
-                       std::set<Point>& out_points,
-                       std::map<size_t, std::set<Point>>& dct_circle_points);
+static void neighbours(
+    const Circle& c1,
+    int c1_idx,
+    const std::vector<Circle>& circles,
+    std::vector<LineSegment>& out_line_segments,
+    std::set<Point>& out_points,
+    std::map<size_t, std::set<Point>>& dct_circle_points,
+    const std::map<size_t, std::set<Point>>& dct_circle_intersections);
 
+static std::map<size_t, std::set<Point>> find_all_circle_circle_intersections(
+    const std::vector<Circle>& circles);
 //////////////////////////////////////////////////////////////
 
 void tangents(const Point& pt, double r1, double r2, std::vector<Line>& dst)
@@ -277,7 +301,7 @@ bool line_segment_cross_circle(const LineSegment& ls, const Circle& c)
 }
 //////////////////////////////////////////////////////////////
 
-static void associate_points_with_circle(
+void associate_point_with_circle(
     const Point& point,
     size_t c_idx,
     std::map<size_t, std::set<Point>>& dct_circle_points)
@@ -294,12 +318,23 @@ static void associate_points_with_circle(
 }
 //////////////////////////////////////////////////////////////
 
-void neighbours(const Circle& c1,
-                int c1_idx,
-                const std::vector<Circle>& circles,
-                std::vector<LineSegment>& out_line_segments,
-                std::set<Point>& out_points,
-                std::map<size_t, std::set<Point>>& dct_circle_points)
+static double norm_atan2(double y, double x)
+{
+  double angle = atan2(y, x);
+  if (angle < 0.)
+    angle += 2 * M_PI;
+  return angle;
+}
+//////////////////////////////////////////////////////////////
+
+void neighbours(
+    const Circle& c1,
+    int c1_idx,
+    const std::vector<Circle>& circles,
+    std::vector<LineSegment>& out_line_segments,
+    std::set<Point>& out_points,
+    std::map<size_t, std::set<Point>>& dct_circle_points,
+    const std::map<size_t, std::set<Point>>& dct_circle_intersections)
 {
   for (size_t c2_idx = c1_idx + 1; c2_idx < circles.size(); ++c2_idx) {
     const Circle& c2 = circles[c2_idx];
@@ -324,8 +359,8 @@ void neighbours(const Circle& c1,
       out_points.insert(pc1);
       out_points.insert(pc2);
 
-      associate_points_with_circle(pc1, c1_idx, dct_circle_points);
-      associate_points_with_circle(pc2, c2_idx, dct_circle_points);
+      associate_point_with_circle(pc1, c1_idx, dct_circle_points);
+      associate_point_with_circle(pc2, c2_idx, dct_circle_points);
       out_line_segments.push_back(ls);
     }  // for l : tls
 
@@ -333,9 +368,97 @@ void neighbours(const Circle& c1,
 
   // at this point all possible points are associated with circle C1.
   // need to connect them all with each other
+  // possible to move to another method of course
 
-  for (size_t i = 0; i < dct_circle_points[c1_idx].size(); ++i) {
+  std::vector<Point> circles_points;
+  circles_points.reserve(dct_circle_points[c1_idx].size() +
+                         dct_circle_intersections.at(c1_idx).size());
+  for (Point p : dct_circle_points[c1_idx]) {
+    circles_points.push_back(p);
   }
+  for (Point p : dct_circle_intersections.at(c1_idx)) {
+    circles_points.push_back(p);
+  }
+
+  std::sort(circles_points.begin(),
+            circles_points.end(),
+            [&c1](const Point& p1, const Point& p2) {
+              double th1 = norm_atan2(p1.y - c1.center.y, p1.x - c1.center.x);
+              double th2 = norm_atan2(p2.y - c1.center.y, p2.x - c1.center.x);
+              return th1 < th2;
+            });
+
+  size_t si = 0;
+  for (size_t i = 0; i < circles_points.size(); ++i) {
+    si = circles_points.size() - 1 - i;
+    if (dct_circle_intersections.at(c1_idx).find(circles_points[si]) !=
+        dct_circle_intersections.at(c1_idx).end()) {
+      break;
+    }
+  }
+
+  for (size_t i = si; i < circles_points.size() + si; ++i) {
+    size_t se = i + 1;
+    for (; se < circles_points.size() + si; ++se) {
+      if (dct_circle_intersections.at(c1_idx).find(
+              circles_points[se % circles_points.size()]) !=
+          dct_circle_intersections.at(c1_idx).end()) {
+        break;
+      }
+    }
+
+    std::cout << "circle_idx: " << c1_idx
+              << " si: " << i % circles_points.size()
+              << " se: " << se % circles_points.size() << "\n";
+    i = se;
+  }
+
+  /* auto ci_it = dct_circle_intersections.find(c1_idx); */
+  /* if (ci_it == dct_circle_intersections.end()) { */
+  /*   for (size_t i = 0; i < circles_points.size(); ++i) { */
+  /*     const Point& a = circles_points[i]; */
+  /*     for (size_t j = i + 1; j < circles_points.size(); ++j) { */
+  /*       const Point& b = circles_points[j]; */
+  /*  */
+  /*       double cos_th = (a.x * b.x + a.y * b.y) / (c1.radius * c1.radius); */
+  /*       double th = acos(cos_th); */
+  /*       double d_ab = th * M_PI * c1.radius; */
+  /*  */
+  /*       std::cout << "circle: " << c1_idx << "\n"; */
+  /*       std::cout << "points: (" << i << "," << j << ")" << "\n"; */
+  /*       std::cout << "point a: " << a.x << " " << a.y << "\n"; */
+  /*       std::cout << "point b: " << b.x << " " << b.y << "\n"; */
+  /*       std::cout << "th: " << th * 180. / M_PI << "\n"; */
+  /*       std::cout << "distance: " << d_ab << "\n"; */
+  /*     } */
+  /*   } */
+  /* } */
+
+}  // neigbours()
+//////////////////////////////////////////////////////////////
+
+std::map<size_t, std::set<Point>> find_all_circle_circle_intersections(
+    const std::vector<Circle>& circles)
+{
+  std::map<size_t, std::set<Point>> dct_circle_intersections;
+  for (size_t i = 0; i < circles.size(); ++i) {
+    dct_circle_intersections.insert(std::make_pair(i, std::set<Point>()));
+
+    const Circle& c1 = circles[i];
+    for (size_t j = 0; j < circles.size(); ++j) {
+      if (i == j)
+        continue;
+
+      const Circle& c2 = circles[j];
+      std::vector<Point> cips = intersection_cc(c1, c2);
+      for (const Point& cip : cips) {
+        associate_point_with_circle(cip, i, dct_circle_intersections);
+        associate_point_with_circle(cip, j, dct_circle_intersections);
+      }
+    }
+  }
+
+  return dct_circle_intersections;
 }
 //////////////////////////////////////////////////////////////
 
@@ -349,32 +472,33 @@ double shortest_path_length(const Point& a,
 
   std::vector<LineSegment> line_segments;
   std::set<Point> points;
+
+  // key - index of circle
+  // value - set of points on this circle
   std::map<size_t, std::set<Point>> dct_circle_points;
+  // points where circle intersects with other circles
+  std::map<size_t, std::set<Point>> dct_circle_intersections =
+      find_all_circle_circle_intersections(circles);
 
-  // all circles intersections
-  for (size_t i = 0; i < circles.size(); ++i) {
-    const Circle& c1 = circles[i];
-    for (size_t j = 0; j < circles.size(); ++j) {
-      if (i == j)
-        continue;
-
-      const Circle& c2 = circles[j];
-      std::vector<Point> cips = intersection_cc(c1, c2);
-      for (const Point& cip : cips) {
-        points.insert(cip);
-        associate_points_with_circle(cip, i, dct_circle_points);
-        associate_points_with_circle(cip, j, dct_circle_points);
-      }
+#if 1
+  // for debug and display only:
+  for (auto& cc_intersection : dct_circle_intersections) {
+    for (auto p : cc_intersection.second) {
+      points.insert(p);
     }
   }
+  ////////////////////
+#endif
 
+  // all circles intersections
   for (size_t i = 0; i < circles.size(); ++i) {
     neighbours(circles[i],
                i,
                circles,
                line_segments,
                points,
-               dct_circle_points);
+               dct_circle_points,
+               dct_circle_intersections);
   }
 
   DrawSystem(points, circles, line_segments);
@@ -389,16 +513,18 @@ int main(int argc, char* argv[])
 #else
   (void)argc;
   (void)argv;
+
   Point a, b;
   std::vector<Circle> c;
   a = {-3, 1};
-  b = {4.25, 0};
+  b = {5.0, 0};
   c = {
-      {0.0,  0.0, 2.5},
-      {1.5,  2.0, 0.5},
-      {3.5,  1.0, 1.0},
-      {3.5,  2.0, 1.0},
-      {3.5, -1.7, 1.2},
+      {0.0, 0.0, 2.5},
+      {0.0, 2.5, 0.5},
+      {2.5, 0.0, 0.5},
+      /* {3.5,  1.0, 1.0}, */
+      /* {3.5,  2.0, 1.3}, */
+      /* {3.5, -1.7, 1.2}, */
   };
 
   try {
