@@ -13,6 +13,7 @@
 #include <vector>
 
 static const double EPS = 1e-9;
+#define DEBUG 1
 
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char* argv[])
@@ -28,25 +29,54 @@ struct Point {
 
   Point() : x(0.0), y(0.0) {}
   Point(double x, double y) : x(x), y(y) {}
-  friend bool operator<(const Point& p1, const Point& p2);
 };
 
-bool operator<(const Point& p1, const Point& p2)
+struct Circle {
+  Point ctr;
+  double r;
+
+  Circle() : ctr(), r(1.0) {}
+  Circle(Point c, double r) : ctr(c), r(r) {}
+  Circle(double cx, double cy, double r) : ctr(cx, cy), r(r) {}
+};
+
+struct MyPoint {
+  double x, y;
+
+  MyPoint() : x(0.0), y(0.0) {}
+  MyPoint(double x, double y) : x(x), y(y) {}
+  friend bool operator<(const MyPoint& p1, const MyPoint& p2);
+};
+
+bool operator<(const MyPoint& p1, const MyPoint& p2)
 {
   if (std::fabs(p1.x - p2.x) <= EPS) {
     return std::round(p1.y / EPS) * EPS < std::round(p2.y / EPS) * EPS;
   }
   return std::round(p1.x / EPS) * EPS < std::round(p2.x / EPS) * EPS;
 }
+inline bool operator==(const MyPoint& lhs, const MyPoint& rhs)
+{
+  return std::fabs(lhs.x - rhs.x) <= EPS && std::fabs(lhs.y - rhs.y) <= EPS;
+}
+inline bool operator!=(const MyPoint& lhs, const MyPoint& rhs)
+{
+  return !(lhs == rhs);
+}
+std::ostream& operator<<(std::ostream& os, const MyPoint& p)
+{
+  os << p.x << ":" << p.y;
+  return os;
+}
 //////////////////////////////////////////////////////////////
 
-struct Circle {
-  Point center;
+struct MyCircle {
+  MyPoint center;
   double radius;
 
-  Circle() : center(), radius(1.0) {}
-  Circle(Point center, double radius) : center(center), radius(radius) {}
-  Circle(double center_x, double center_y, double radius)
+  MyCircle() : center(), radius(1.0) {}
+  MyCircle(MyPoint center, double radius) : center(center), radius(radius) {}
+  MyCircle(double center_x, double center_y, double radius)
       : center(center_x, center_y), radius(radius)
   {
   }
@@ -70,18 +100,18 @@ struct Line {
 };
 
 struct LineSegment {
-  Point a, b;
+  MyPoint a, b;
   LineSegment() : a(), b() {}
-  LineSegment(Point a, Point b) : a(a), b(b) {}
+  LineSegment(MyPoint a, MyPoint b) : a(a), b(b) {}
 };
 
 struct Arc {
-  Point a, b;     // points on circle
+  MyPoint a, b;   // points on circle
   double r;       // radius
   double thetha;  // angle between points
 
   Arc() : a(), b(), r(0.), thetha(0.) {}
-  Arc(Point a, Point b, double r, double thetha)
+  Arc(MyPoint a, MyPoint b, double r, double thetha)
       : a(a), b(b), r(r), thetha(thetha)
   {
   }
@@ -89,11 +119,12 @@ struct Arc {
 //////////////////////////////////////////////////////////////
 
 struct Vertex {
-  Point point;
+  MyPoint point;
   double distance;
 
   Vertex() : point(), distance(0.) {}
-  Vertex(const Point& point, double distance) : point(point), distance(distance)
+  Vertex(const MyPoint& point, double distance)
+      : point(point), distance(distance)
   {
   }
   friend bool operator<(const Vertex& v1, const Vertex& v2);
@@ -105,57 +136,60 @@ bool operator<(const Vertex& v1, const Vertex& v2)
 }
 //////////////////////////////////////////////////////////////
 
-typedef std::map<Point, std::set<Vertex>> graph_t;
+typedef std::map<MyPoint, std::set<Vertex>> graph_t;
 //////////////////////////////////////////////////////////////
 
-static void DrawSystem(const std::set<Point>& points,
-                       const std::vector<Circle>& circles,
-                       const std::vector<LineSegment>& lines);
+static void DrawSystem(const std::set<MyPoint>& points,
+                       const std::vector<MyCircle>& circles,
+                       const std::vector<LineSegment>& lines,
+                       const std::vector<MyPoint>& path);
 
-static void tangents(const Point& pt,
+static void tangents(const MyPoint& pt,
                      double r1,
                      double r2,
                      std::vector<Line>& dst);
 
-static std::vector<Line> tangences(const Circle& c1, const Circle& c2);
+static std::vector<Line> tangences(const MyCircle& c1, const MyCircle& c2);
 
 /**
  * intersection_ntc: finds point of intersection of NORMALIZED TANGENT
  * line with the given circle. if line is not tangent to the given circle
  * assertion FAILS
  * */
-static Point intersection_ntc(const Line& l, const Circle& circle);
+static MyPoint intersection_ntc(const Line& l, const MyCircle& circle);
 
 /**
  * intersection_lc: finds points of intersection of line and circle
  * */
-static std::vector<Point> intersection_lc(const Line& l, const Circle& circle);
+static std::vector<MyPoint> intersection_lc(const Line& l,
+                                            const MyCircle& circle);
 
 /**
  * intersection_cc: finds points of intersection of two circles
  * */
-static std::vector<Point> intersection_cc(const Circle& c1, const Circle& c2);
+static std::vector<MyPoint> intersection_cc(const MyCircle& c1,
+                                            const MyCircle& c2);
 
 static void associate_point_with_circle(
-    const Point& point,
+    const MyPoint& point,
     size_t c_idx,
-    std::map<size_t, std::set<Point>>& dct_circle_points);
-static bool line_segment_cross_circle(const LineSegment& ls, const Circle& c);
+    std::map<size_t, std::set<MyPoint>>& dct_circle_points);
+static bool line_segment_cross_circle(const LineSegment& ls, const MyCircle& c);
 static void neighbours(
-    const Circle& c1,
+    const MyCircle& c1,
     int c1_idx,
-    const std::vector<Circle>& circles,
+    const std::vector<MyCircle>& circles,
     graph_t& out_graph,
     std::vector<LineSegment>& out_line_segments,
-    std::set<Point>& out_points,
-    std::map<size_t, std::set<Point>>& dct_circle_points,
-    const std::map<size_t, std::set<Point>>& dct_circle_intersections);
+    std::set<MyPoint>& out_points,
+    std::map<size_t, std::set<MyPoint>>& dct_circle_points,
+    const std::map<size_t, std::set<MyPoint>>& dct_circle_intersections);
 
-static std::map<size_t, std::set<Point>> find_all_circle_circle_intersections(
-    const std::vector<Circle>& circles);
+static std::map<size_t, std::set<MyPoint>> find_all_circle_circle_intersections(
+    const std::vector<MyCircle>& circles);
 //////////////////////////////////////////////////////////////
 
-void tangents(const Point& pt, double r1, double r2, std::vector<Line>& dst)
+void tangents(const MyPoint& pt, double r1, double r2, std::vector<Line>& dst)
 {
   /*
    * System of equations with given x, y, r1 and r2:
@@ -169,7 +203,7 @@ void tangents(const Point& pt, double r1, double r2, std::vector<Line>& dst)
   if (d < -EPS) {
     return;
   }
-  d = sqrt(abs(d));
+  d = std::sqrt(std::fabs(d));
   double a = (pt.x * r + pt.y * d) / z;
   double b = (pt.y * r - pt.x * d) / z;
   double c = r1;
@@ -179,12 +213,12 @@ void tangents(const Point& pt, double r1, double r2, std::vector<Line>& dst)
 }
 //////////////////////////////////////////////////////////////
 
-std::vector<Line> tangences(const Circle& c1, const Circle& c2)
+std::vector<Line> tangences(const MyCircle& c1, const MyCircle& c2)
 {
   std::vector<Line> lines;
   for (int i = -1; i <= 1; i += 2) {
     for (int j = -1; j <= 1; j += 2) {
-      Point pt(c2.center.x - c1.center.x, c2.center.y - c1.center.y);
+      MyPoint pt(c2.center.x - c1.center.x, c2.center.y - c1.center.y);
       tangents(pt, c1.radius * i, c2.radius * j, lines);
     }
   }
@@ -197,7 +231,7 @@ std::vector<Line> tangences(const Circle& c1, const Circle& c2)
 }
 //////////////////////////////////////////////////////////////
 
-std::vector<Point> intersection_lc(const Line& l, const Circle& circle)
+std::vector<MyPoint> intersection_lc(const Line& l, const MyCircle& circle)
 {
   double a = l.a;
   double b = l.b;
@@ -208,12 +242,12 @@ std::vector<Point> intersection_lc(const Line& l, const Circle& circle)
   double y0 = -b * c / (a * a + b * b);
 
   if (c * c > r * r * (a * a + b * b) + EPS) {
-    return std::vector<Point>();  // empty
+    return std::vector<MyPoint>();  // empty
   }
 
-  if (abs(c * c - r * r * (a * a + b * b)) < EPS) {
+  if (std::fabs(c * c - r * r * (a * a + b * b)) < EPS) {
     // only tangece
-    return std::vector<Point>{Point(x0, y0)};
+    return std::vector<MyPoint>{MyPoint(x0, y0)};
   }
 
   double d = r * r - c * c / (a * a + b * b);
@@ -224,11 +258,11 @@ std::vector<Point> intersection_lc(const Line& l, const Circle& circle)
   ay = y0 - a * mult;
   by = y0 + a * mult;
 
-  return std::vector<Point>{Point(ax, ay), Point(bx, by)};
+  return std::vector<MyPoint>{MyPoint(ax, ay), MyPoint(bx, by)};
 }
 //////////////////////////////////////////////////////////////
 
-std::vector<Point> intersection_cc(const Circle& c1, const Circle& c2)
+std::vector<MyPoint> intersection_cc(const MyCircle& c1, const MyCircle& c2)
 {
   // x^2 + y^2 = r1^2
   // (x - x2)^2 + (y - y2)^2 = r2^2
@@ -251,8 +285,8 @@ std::vector<Point> intersection_cc(const Circle& c1, const Circle& c2)
   double c = x2 * x2 + y2 * y2 + r1 * r1 - r2 * r2;
 
   Line l(a, b, c);
-  std::vector<Point> ips = intersection_lc(l, c1);
-  for (Point& p : ips) {
+  std::vector<MyPoint> ips = intersection_lc(l, c1);
+  for (MyPoint& p : ips) {
     p.x += c1.center.x;
     p.y += c1.center.y;
   }
@@ -260,13 +294,13 @@ std::vector<Point> intersection_cc(const Circle& c1, const Circle& c2)
 }
 //////////////////////////////////////////////////////////////
 
-Point intersection_ntc(const Line& l, const Circle& circle)
+MyPoint intersection_ntc(const Line& l, const MyCircle& circle)
 {
-  if (abs(l.a * l.a + l.b * l.b - 1.) >= EPS) {
+  if (std::fabs(l.a * l.a + l.b * l.b - 1.) >= EPS) {
     throw std::invalid_argument("line is not normalized");
   }
 
-  std::vector<Point> res;
+  std::vector<MyPoint> res;
   double cx = circle.center.x;
   double cy = circle.center.y;
   double r = circle.radius;
@@ -279,13 +313,13 @@ Point intersection_ntc(const Line& l, const Circle& circle)
   double y0 = -b * c;
 
   double dcr = c * c - r * r;
-  assert(abs(dcr) <= EPS);  // they should be equal.
+  assert(std::fabs(dcr) <= EPS);  // they should be equal.
 
-  return Point(x0 + cx, y0 + cy);
+  return MyPoint(x0 + cx, y0 + cy);
 }
 //////////////////////////////////////////////////////////////
 
-bool line_segment_cross_circle(const LineSegment& ls, const Circle& c)
+bool line_segment_cross_circle(const LineSegment& ls, const MyCircle& c)
 {
   double x1 = ls.a.x;
   double y1 = ls.a.y;
@@ -295,8 +329,8 @@ bool line_segment_cross_circle(const LineSegment& ls, const Circle& c)
   double y3 = c.center.y;
 
   // check that neither point 1 nor point 2 are inside the circle
-  double d1 = sqrt((x3 - x1) * (x3 - x1) + (y3 - y1) * (y3 - y1));
-  double d2 = sqrt((x3 - x2) * (x3 - x2) + (y3 - y2) * (y3 - y2));
+  double d1 = std::sqrt((x3 - x1) * (x3 - x1) + (y3 - y1) * (y3 - y1));
+  double d2 = std::sqrt((x3 - x2) * (x3 - x2) + (y3 - y2) * (y3 - y2));
   if (d1 < c.radius || d2 < c.radius) {
     return true;
   }
@@ -311,21 +345,21 @@ bool line_segment_cross_circle(const LineSegment& ls, const Circle& c)
   double x = x1 + u * (x2 - x1);
   double y = y1 + u * (y2 - y1);
 
-  double d = sqrt((x3 - x) * (x3 - x) + (y3 - y) * (y3 - y));
+  double d = std::sqrt((x3 - x) * (x3 - x) + (y3 - y) * (y3 - y));
   return d < c.radius;
 }
 //////////////////////////////////////////////////////////////
 
 void associate_point_with_circle(
-    const Point& point,
+    const MyPoint& point,
     size_t c_idx,
-    std::map<size_t, std::set<Point>>& dct_circle_points)
+    std::map<size_t, std::set<MyPoint>>& dct_circle_points)
 {
-  std::map<size_t, std::set<Point>>::iterator it =
+  std::map<size_t, std::set<MyPoint>>::iterator it =
       dct_circle_points.find(c_idx);
 
   if (it == dct_circle_points.end()) {
-    auto ni = std::make_pair(c_idx, std::set<Point>{point});
+    auto ni = std::make_pair(c_idx, std::set<MyPoint>{point});
     dct_circle_points.insert(ni);
   } else {
     it->second.insert(point);
@@ -343,25 +377,25 @@ static double norm_atan2(double y, double x)
 //////////////////////////////////////////////////////////////
 
 static void connect_points_on_circle(
-    const Circle& c1,
+    const MyCircle& c1,
     int c1_idx,
-    std::map<size_t, std::set<Point>>& dct_circle_points,
-    const std::map<size_t, std::set<Point>>& dct_circle_intersections,
+    std::map<size_t, std::set<MyPoint>>& dct_circle_points,
+    const std::map<size_t, std::set<MyPoint>>& dct_circle_intersections,
     graph_t& out_graph)
 {
-  std::vector<Point> circles_points;
+  std::vector<MyPoint> circles_points;
   circles_points.reserve(dct_circle_points[c1_idx].size() +
                          dct_circle_intersections.at(c1_idx).size());
-  for (Point p : dct_circle_points[c1_idx]) {
+  for (MyPoint p : dct_circle_points[c1_idx]) {
     circles_points.push_back(p);
   }
-  for (Point p : dct_circle_intersections.at(c1_idx)) {
+  for (MyPoint p : dct_circle_intersections.at(c1_idx)) {
     circles_points.push_back(p);
   }
 
   std::sort(circles_points.begin(),
             circles_points.end(),
-            [&c1](const Point& p1, const Point& p2) {
+            [&c1](const MyPoint& p1, const MyPoint& p2) {
               double th1 = norm_atan2(p1.y - c1.center.y, p1.x - c1.center.x);
               double th2 = norm_atan2(p2.y - c1.center.y, p2.x - c1.center.x);
               return th1 < th2;
@@ -389,46 +423,55 @@ static void connect_points_on_circle(
     size_t begin = i % circles_points.size();
     size_t end = se % circles_points.size();
 
-    /* std::cout << "circle_idx: " << c1_idx << " si: " << begin << " se: " <<
-     * end */
-    /*           << "\n"; */
+    /* std::cout << "c1: " << c1_idx << " " << c1.center << "\n"; */
+    /* std::cout << "begin: " << begin << " end: " << end << "\n"; */
 
     for (size_t ai = begin + 1; ai % circles_points.size() != end; ++ai) {
-      Point a = circles_points[ai % circles_points.size()];
+      MyPoint a = circles_points[ai % circles_points.size()];
       for (size_t bi = ai + 1; bi % circles_points.size() != end; ++bi) {
-        Point b = circles_points[bi % circles_points.size()];
-        double cos_th = (a.x * b.x + a.y * b.y) / (c1.radius * c1.radius);
-        double th = acos(cos_th);
-        double d_ab = th * M_PI * c1.radius;
+        MyPoint b = circles_points[bi % circles_points.size()];
+        double ax = a.x - c1.center.x;
+        double bx = b.x - c1.center.x;
+        double ay = a.y - c1.center.y;
+        double by = b.y - c1.center.y;
+
+        double th_a = norm_atan2(ay, ax);
+        double th_b = norm_atan2(by, bx);
+
+        /* std::cout << "\tai: " << ai << " bi: " << bi << "\n"; */
+        /* std::cout << "\tth_a: " << th_a << " th_b: " << th_b << "\n"; */
+        /* std::cout << "\td_th: " << th_b - th_a << "\n\n"; */
+
+        double d_th = th_b - th_a;
+        if (d_th < 0.) {
+          d_th += 2 * M_PI;
+        }
+        double d_ab = d_th * c1.radius;
         out_graph[a].insert(Vertex(b, d_ab));
         out_graph[b].insert(Vertex(a, d_ab));
-        /* std::cout << "\tai: " << ai % circles_points.size() */
-        /*           << " bi: " << bi % circles_points.size() << "\n"; */
-      }
-    }
-
-    i = se;
+      }  // for bi = ai+1; bi != end; ++bi
+    }  // for ai = begin + 1; ai != end
   }  // for (size_t i = si; i < circles_points.size() + si; ++i)
 }
 //////////////////////////////////////////////////////////////
 
 void neighbours(
-    const Circle& c1,
+    const MyCircle& c1,
     int c1_idx,
-    const std::vector<Circle>& circles,
+    const std::vector<MyCircle>& circles,
     graph_t& out_graph,
     std::vector<LineSegment>& out_line_segments,
-    std::set<Point>& out_points,
-    std::map<size_t, std::set<Point>>& dct_circle_points,
-    const std::map<size_t, std::set<Point>>& dct_circle_intersections)
+    std::set<MyPoint>& out_points,
+    std::map<size_t, std::set<MyPoint>>& dct_circle_points,
+    const std::map<size_t, std::set<MyPoint>>& dct_circle_intersections)
 {
   for (size_t c2_idx = c1_idx + 1; c2_idx < circles.size(); ++c2_idx) {
-    const Circle& c2 = circles[c2_idx];
+    const MyCircle& c2 = circles[c2_idx];
     std::vector<Line> tls = tangences(c1, c2);
 
     for (auto l : tls) {
-      Point pc1 = intersection_ntc(l, c1);
-      Point pc2 = intersection_ntc(l, c2);
+      MyPoint pc1 = intersection_ntc(l, c1);
+      MyPoint pc2 = intersection_ntc(l, c2);
       LineSegment ls(pc1, pc2);
 
       bool exclude = false;
@@ -444,7 +487,7 @@ void neighbours(
 
       double dx = pc1.x - pc2.x;
       double dy = pc1.y - pc2.y;
-      double distance = sqrt(dx * dx + dy * dy);
+      double distance = std::sqrt(dx * dx + dy * dy);
       out_graph[pc1].insert(Vertex(pc2, distance));
       out_graph[pc2].insert(Vertex(pc1, distance));
 
@@ -468,21 +511,21 @@ void neighbours(
 }  // neigbours()
 //////////////////////////////////////////////////////////////
 
-std::map<size_t, std::set<Point>> find_all_circle_circle_intersections(
-    const std::vector<Circle>& circles)
+std::map<size_t, std::set<MyPoint>> find_all_circle_circle_intersections(
+    const std::vector<MyCircle>& circles)
 {
-  std::map<size_t, std::set<Point>> dct_circle_intersections;
+  std::map<size_t, std::set<MyPoint>> dct_circle_intersections;
   for (size_t i = 0; i < circles.size(); ++i) {
-    dct_circle_intersections.insert(std::make_pair(i, std::set<Point>()));
+    dct_circle_intersections.insert(std::make_pair(i, std::set<MyPoint>()));
 
-    const Circle& c1 = circles[i];
+    const MyCircle& c1 = circles[i];
     for (size_t j = 0; j < circles.size(); ++j) {
       if (i == j)
         continue;
 
-      const Circle& c2 = circles[j];
-      std::vector<Point> cips = intersection_cc(c1, c2);
-      for (const Point& cip : cips) {
+      const MyCircle& c2 = circles[j];
+      std::vector<MyPoint> cips = intersection_cc(c1, c2);
+      for (const MyPoint& cip : cips) {
         associate_point_with_circle(cip, i, dct_circle_intersections);
         associate_point_with_circle(cip, j, dct_circle_intersections);
       }
@@ -497,29 +540,21 @@ double shortest_path_length(const Point& a,
                             const Point& b,
                             const std::vector<Circle>& in_circles)
 {
-  std::vector<Circle> circles = {Circle(a, 0.)};
-  circles.insert(circles.end(), in_circles.begin(), in_circles.end());
-  circles.push_back(Circle(b, 0.));
+  std::vector<MyCircle> circles = {MyCircle(a.x, a.y, 0.)};
+  for (auto in_c : in_circles) {
+    circles.push_back(MyCircle(in_c.ctr.x, in_c.ctr.y, in_c.r));
+  }
+  circles.push_back(MyCircle(b.x, b.y, 0.));
 
   std::vector<LineSegment> line_segments;
-  std::set<Point> points;
+  std::set<MyPoint> points;
 
   // key - index of circle
   // value - set of points on this circle
-  std::map<size_t, std::set<Point>> dct_circle_points;
+  std::map<size_t, std::set<MyPoint>> dct_circle_points;
   // points where circle intersects with other circles
-  std::map<size_t, std::set<Point>> dct_circle_intersections =
+  std::map<size_t, std::set<MyPoint>> dct_circle_intersections =
       find_all_circle_circle_intersections(circles);
-
-#if 1
-  // for debug and display only:
-  for (auto& cc_intersection : dct_circle_intersections) {
-    for (auto p : cc_intersection.second) {
-      points.insert(p);
-    }
-  }
-  ////////////////////
-#endif
 
   graph_t graph;
   for (size_t i = 0; i < circles.size(); ++i) {
@@ -533,16 +568,79 @@ double shortest_path_length(const Point& a,
                dct_circle_intersections);
   }
 
+#if DEBUG
+  std::cout << "\n\tGRAPH:\n\n";
   for (auto it : graph) {
-    std::cout << it.first.x << " " << it.first.y << "\n";
+    std::cout << it.first << "\n";
     for (auto v : it.second) {
-      std::cout << "\t" << v.point.x << " " << v.point.y << " " << v.distance
-                << "\n";
+      std::cout << "\t" << v.point << " " << v.distance << "\n";
     }
   }
+#endif
 
-  DrawSystem(points, circles, line_segments);
-  return 0.;
+  // find shortest path (Dijkstra)
+  static const double INF = 10000000.;
+  static const MyPoint IMPOSSIBLE_POINT(std::numeric_limits<double>::max(),
+                                        std::numeric_limits<double>::max());
+  std::map<MyPoint, double> d;
+  std::map<MyPoint, bool> u;
+  std::map<MyPoint, MyPoint> p;
+
+  // init D, U and P
+  MyPoint a_ = MyPoint(a.x, a.y);
+  MyPoint b_ = MyPoint(b.x, b.y);
+  if (graph.find(b_) == graph.end()) {
+    return -1.;
+  }
+
+  for (const auto& node : graph) {
+    d.insert(std::make_pair(MyPoint(node.first), INF));
+    u.insert(std::make_pair(MyPoint(node.first), false));
+    p.insert(std::make_pair(MyPoint(node.first), IMPOSSIBLE_POINT));
+  }
+  d[a_] = 0.;
+
+  for (size_t i = 0; i < graph.size(); ++i) {
+    MyPoint v;
+    bool first = true;
+    for (const auto& j : graph) {
+      if (u[j.first])
+        continue;
+
+      if (first || d[j.first] < d[v]) {
+        v = j.first;
+        first = false;
+      }
+    }  // for j : graph
+
+    if (d[v] == INF)
+      break;
+
+    u[v] = true;
+    for (const auto& j : graph.at(v)) {
+      MyPoint to = j.point;
+      if (d[v] + j.distance < d[to]) {
+        d[to] = d[v] + j.distance;
+        p[to] = v;
+      }
+    }
+  }  // end of Dijkstra's alg
+
+  std::vector<MyPoint> path;
+  for (MyPoint v = b_; v != a_ && v != IMPOSSIBLE_POINT; v = p[v]) {
+    std::cout << v << std::endl;
+    path.push_back(v);
+  }
+  path.push_back(a_);
+  std::reverse(path.begin(), path.end());
+
+#if DEBUG
+  for (auto p : path) {
+    std::cout << p << d[p] << "\n";
+  }
+  DrawSystem(points, circles, line_segments, path);
+#endif
+  return d[b_] == INF ? -1. : d[b_];
 }
 //////////////////////////////////////////////////////////////
 
@@ -554,24 +652,127 @@ int main(int argc, char* argv[])
   (void)argc;
   (void)argv;
 
-  Point a, b;
-  std::vector<Circle> c;
-  a = {-3, 1};
-  b = {5.0, 0};
-  c = {
-      {0.0, 0.0, 2.5},
-      {0.0, 2.5, 0.5},
-      {2.5, 0.0, 0.5},
-      /* {3.5,  1.0, 1.0}, */
-      /* {3.5,  2.0, 1.3}, */
-      /* {3.5, -1.7, 1.2}, */
+  struct test_case_t {
+    Point a, b;
+    std::vector<Circle> c;
+    double expected;
   };
 
-  try {
-    shortest_path_length(a, b, c);
-  } catch (const std::exception& exc) {
-    std::cout << exc.what() << std::endl;
-    return 1;
+  test_case_t t1 = {
+      .a = {-3, 1},
+      .b = {4.25, 0},
+      .c = {{0.0, 0.0, 2.5},
+            {1.5, 2.0, 0.5},
+            {3.5, 1.0, 1.0},
+            {3.5, -1.7, 1.2}},
+      .expected = 9.11821650244,
+  };
+  test_case_t t2 = {
+      .a = {0, 1},
+      .b = {0, -1},
+      .c = {{0.0, 0.0, 0.8},
+            {3.8, 0.0, 3.2},
+            {-3.5, 0.0, 3.0},
+            {-7.0, 0.0, 1.0}},
+      .expected = 19.0575347577,
+  };
+
+  test_case_t t3 = {
+      .a = {3, 0},
+      .b = {0, 4},
+      .c = {{0, 0, 1}},
+      .expected = 5.,
+  };
+
+  test_case_t t4 = {
+      .a = {0, 0},
+      .b = {20, 20},
+      .c = {{4, 0, 3}, {-4, 0, 3}, {0, 4, 3}, {0, -4, 3}},
+      .expected = -1.,
+  };
+
+  test_case_t t5 = {
+      .a = {0, 1},
+      .b = {0, -1},
+      .c = {{0.0, 0.0, 0.8},
+            {-3.8, 0.0, 3.2},
+            {3.5, 0.0, 3.0},
+            {7.0, 0.0, 1.0}},
+      .expected = 19.0575347577,
+  };
+
+  test_case_t t6 = {
+      .a = {0, -7},
+      .b = {8, 8},
+      .c = {},
+      .expected = 17.0,
+  };
+
+  test_case_t t7 = {
+      .a = {0.5, 0.5},
+      .b = {2, 2},
+      .c = {{0, 0, 1}},
+      .expected = -1.,
+  };
+
+  test_case_t t8 = {
+      .a = {2, 2},
+      .b = {0.5, 0.5},
+      .c = {{0, 0, 1}},
+      .expected = -1.,
+  };
+
+  test_case_t t9 = {
+      .a = {-2.51672, 1.30616},
+      .b = {3.87272, -1.91084},
+      .c =
+          {
+            {-0.597119, 0.88165, 0.91446},  {-0.962345, -4.03892, 1.30996},
+            {-4.39527, 0.598278, 1.14107},  {-4.04069, -3.12178, 1.03569},
+            {-4.75432, -4.2065, 0.668657},  {-0.035397, -0.376569, 1.08104},
+            {-3.09102, 3.95867, 1.3898},    {2.99264, 1.72149, 0.850079},
+            {3.63657, 0.886315, 1.25232},   {3.49616, 2.21439, 1.23538},
+            {1.00417, -2.31594, 0.470425},  {0.848565, -2.36409, 0.873431},
+            {-1.33173, -1.14513, 1.33513},  {2.36933, 4.22031, 1.2208},
+            {2.87691, 1.33573, 0.733986},   {2.83323, -1.17842, 0.67553},
+            {-2.05985, 3.95228, 0.900663},  {0.601596, -1.76171, 0.99692},
+            {0.378449, 1.05643, 0.667554},  {-4.80266, 3.96277, 0.798043},
+            {0.228887, 3.70402, 1.23521},   {-4.57708, 0.916904, 1.20442},
+            {-3.53017, 1.16296, 0.842481},  {-1.25862, 3.24817, 0.927703},
+            {-3.52648, -1.43026, 0.508443}, {-4.64439, -3.50993, 1.43188},
+            {1.5644, -3.07672, 0.909408},   {-2.02056, 2.09043, 0.909134},
+            {0.897352, 3.06997, 0.938222},  {4.44652, -3.77101, 1.07068},
+            {2.72584, 3.64219, 1.05714},    {-1.20085, -1.2677, 0.33171},
+            {4.45392, 1.81521, 0.78651},    {1.08901, -1.50047, 0.767389},
+            {-0.5909, 2.99315, 0.957265},   {0.555153, -2.07293, 1.1748},
+            {-2.21517, -1.12519, 0.783175}, {0.431842, 2.53361, 0.766385},
+            },
+      .expected = 8.26474,
+  };
+
+  test_case_t* test_cases[] = {
+      /* &t1, */
+      /* &t2, */
+      /* &t3, */
+      /* &t4, */
+      /* &t5, */
+      /* &t6, */
+      /* &t7, */
+      /* &t8, */
+      &t9,
+      nullptr,
+  };
+
+  for (test_case_t** tc = test_cases; *tc; ++tc) {
+    try {
+      test_case_t* ptc = *tc;
+      double act = shortest_path_length(ptc->a, ptc->b, ptc->c);
+      std::cout << act << " == " << ptc->expected << "\t"
+                << (act == ptc->expected) << "\n";
+    } catch (const std::exception& exc) {
+      std::cout << exc.what() << std::endl;
+      return 1;
+    }
   }
 
   return 0;
@@ -581,14 +782,15 @@ int main(int argc, char* argv[])
 /////////////////////////////////////////////////////////////////
 /////////////////////////////////////////////////////////////////
 
-void DrawSystem(const std::set<Point>& points,
-                const std::vector<Circle>& circles,
-                const std::vector<LineSegment>& lines)
+void DrawSystem(const std::set<MyPoint>& points,
+                const std::vector<MyCircle>& circles,
+                const std::vector<LineSegment>& lines,
+                const std::vector<MyPoint>& path)
 {
   const char* wn = "TipToe through the circle";
-  const double scale = 60.;
-  const int width = 1000;
-  const int height = 700;
+  const double scale = 50.;
+  const int width = 1200;
+  const int height = 800;
   const int center_offset_x = width / 2;
   const int center_offset_y = height / 2;
   cv::Mat mat_img(height, width, CV_8UC4, cv::Scalar(255, 255, 255));
@@ -596,6 +798,7 @@ void DrawSystem(const std::set<Point>& points,
   cv::Scalar circle_color(0xe0, 0xe0, 0xe0);
   cv::Scalar point_color(0, 0, 0);
   cv::Scalar line_color(0x00, 0xff, 0x00);
+  cv::Scalar path_color(0x00, 0x00, 0xff);
 
   cv::namedWindow(wn);
 
@@ -604,8 +807,7 @@ void DrawSystem(const std::set<Point>& points,
                cv::Point(c.center.x * scale + center_offset_x,
                          c.center.y * scale + center_offset_y),
                c.radius * scale,
-               circle_color,
-               -1);
+               circle_color);
   }
 
   cv::line(mat_img,
@@ -633,6 +835,14 @@ void DrawSystem(const std::set<Point>& points,
         1,
         point_color,
         2);
+  }
+
+  for (size_t i = 0; i < path.size() - 1; ++i) {
+    cv::Point a(path[i].x * scale + center_offset_x,
+                path[i].y * scale + center_offset_y);
+    cv::Point b(path[i + 1].x * scale + center_offset_x,
+                path[i + 1].y * scale + center_offset_y);
+    cv::line(mat_img, a, b, path_color);
   }
 
   cv::flip(mat_img, mat_img, 0);
