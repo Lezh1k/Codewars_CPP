@@ -12,7 +12,7 @@
 #include <utility>
 #include <vector>
 
-static const double EPS = 1e-9;
+static const double EPS = 1e-8;
 #define DEBUG 1
 
 #ifdef _UNIT_TESTS_
@@ -357,7 +357,6 @@ void associate_point_with_circle(
 {
   std::map<size_t, std::set<MyPoint>>::iterator it =
       dct_circle_points.find(c_idx);
-
   if (it == dct_circle_points.end()) {
     auto ni = std::make_pair(c_idx, std::set<MyPoint>{point});
     dct_circle_points.insert(ni);
@@ -423,12 +422,9 @@ static void connect_points_on_circle(
     size_t begin = i % circles_points.size();
     size_t end = se % circles_points.size();
 
-    /* std::cout << "c1: " << c1_idx << " " << c1.center << "\n"; */
-    /* std::cout << "begin: " << begin << " end: " << end << "\n"; */
-
-    for (size_t ai = begin + 1; ai % circles_points.size() != end; ++ai) {
+    for (size_t ai = begin; ai % circles_points.size() != end; ++ai) {
       MyPoint a = circles_points[ai % circles_points.size()];
-      for (size_t bi = ai + 1; bi % circles_points.size() != end; ++bi) {
+      for (size_t bi = ai; bi % circles_points.size() != end; ++bi) {
         MyPoint b = circles_points[bi % circles_points.size()];
         double ax = a.x - c1.center.x;
         double bx = b.x - c1.center.x;
@@ -437,11 +433,6 @@ static void connect_points_on_circle(
 
         double th_a = norm_atan2(ay, ax);
         double th_b = norm_atan2(by, bx);
-
-        /* std::cout << "\tai: " << ai << " bi: " << bi << "\n"; */
-        /* std::cout << "\tth_a: " << th_a << " th_b: " << th_b << "\n"; */
-        /* std::cout << "\td_th: " << th_b - th_a << "\n\n"; */
-
         double d_th = th_b - th_a;
         if (d_th < 0.) {
           d_th += 2 * M_PI;
@@ -576,6 +567,7 @@ double shortest_path_length(const Point& a,
       std::cout << "\t" << v.point << " " << v.distance << "\n";
     }
   }
+  std::cout << "\n\t\\GRAPH\n";
 #endif
 
   // find shortest path (Dijkstra)
@@ -626,17 +618,17 @@ double shortest_path_length(const Point& a,
     }
   }  // end of Dijkstra's alg
 
+#if DEBUG
   std::vector<MyPoint> path;
   for (MyPoint v = b_; v != a_ && v != IMPOSSIBLE_POINT; v = p[v]) {
-    std::cout << v << std::endl;
     path.push_back(v);
   }
   path.push_back(a_);
   std::reverse(path.begin(), path.end());
 
-#if DEBUG
+  std::cout << "\nPATH:\n";
   for (auto p : path) {
-    std::cout << p << d[p] << "\n";
+    std::cout << p << "  " << d[p] << "\n";
   }
   DrawSystem(points, circles, line_segments, path);
 #endif
@@ -750,6 +742,24 @@ int main(int argc, char* argv[])
       .expected = 8.26474,
   };
 
+  test_case_t tA = {
+      .a = {2, 0},
+      .b = {-3, 3},
+      .c = {{0, 0, 2}},
+      .expected = 6.29421907015,
+  };
+
+  test_case_t tB = {
+      .a = {3, 5},
+      .b = {3, -5},
+      .c =
+          {
+            {0, 0, 3},
+            {5, 0, 2},
+            },
+      .expected = 10.,
+  };
+
   test_case_t* test_cases[] = {
       /* &t1, */
       /* &t2, */
@@ -760,6 +770,8 @@ int main(int argc, char* argv[])
       /* &t7, */
       /* &t8, */
       &t9,
+      /* &tA, */
+      /* &tB, */
       nullptr,
   };
 
@@ -767,8 +779,8 @@ int main(int argc, char* argv[])
     try {
       test_case_t* ptc = *tc;
       double act = shortest_path_length(ptc->a, ptc->b, ptc->c);
-      std::cout << act << " == " << ptc->expected << "\t"
-                << (act == ptc->expected) << "\n";
+      std::cout << std::setprecision(12) << act << " == " << ptc->expected;
+      std::cout << "\t" << (std::fabs(act - ptc->expected) <= EPS) << "\n";
     } catch (const std::exception& exc) {
       std::cout << exc.what() << std::endl;
       return 1;
@@ -788,9 +800,9 @@ void DrawSystem(const std::set<MyPoint>& points,
                 const std::vector<MyPoint>& path)
 {
   const char* wn = "TipToe through the circle";
-  const double scale = 50.;
-  const int width = 1200;
-  const int height = 800;
+  const double scale = 90.;
+  const int width = 1400;
+  const int height = 1000;
   const int center_offset_x = width / 2;
   const int center_offset_y = height / 2;
   cv::Mat mat_img(height, width, CV_8UC4, cv::Scalar(255, 255, 255));
@@ -799,6 +811,8 @@ void DrawSystem(const std::set<MyPoint>& points,
   cv::Scalar point_color(0, 0, 0);
   cv::Scalar line_color(0x00, 0xff, 0x00);
   cv::Scalar path_color(0x00, 0x00, 0xff);
+  cv::Scalar start_color(0xff, 0x00, 0x00);
+  cv::Scalar end_color(0xff, 0xff, 0x00);
 
   cv::namedWindow(wn);
 
@@ -834,7 +848,7 @@ void DrawSystem(const std::set<MyPoint>& points,
         cv::Point(p.x * scale + center_offset_x, p.y * scale + center_offset_y),
         1,
         point_color,
-        2);
+        -1);
   }
 
   for (size_t i = 0; i < path.size() - 1; ++i) {
@@ -844,6 +858,19 @@ void DrawSystem(const std::set<MyPoint>& points,
                 path[i + 1].y * scale + center_offset_y);
     cv::line(mat_img, a, b, path_color);
   }
+
+  cv::circle(mat_img,
+             cv::Point(path.front().x * scale + center_offset_x,
+                       path.front().y * scale + center_offset_y),
+             1,
+             start_color,
+             -1);
+  cv::circle(mat_img,
+             cv::Point(path.back().x * scale + center_offset_x,
+                       path.back().y * scale + center_offset_y),
+             1,
+             end_color,
+             -1);
 
   cv::flip(mat_img, mat_img, 0);
   cv::imshow(wn, mat_img);
