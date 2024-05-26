@@ -100,30 +100,29 @@ struct Arc {
 };
 //////////////////////////////////////////////////////////////
 
-struct Vertex {
-  Point point;
+struct Edge {
+  Point point;  // destination point
   double distance;
 
-  Vertex() : point(), distance(0.) {}
-  Vertex(const Point& point, double distance) : point(point), distance(distance)
+  Edge() : point(), distance(0.) {}
+  Edge(const Point& point, double distance) : point(point), distance(distance)
   {
   }
-  friend bool operator<(const Vertex& v1, const Vertex& v2);
+  friend bool operator<(const Edge& v1, const Edge& v2);
 };
 
-bool operator<(const Vertex& v1, const Vertex& v2)
+bool operator<(const Edge& v1, const Edge& v2)
 {
   return v1.point < v2.point;
 }
 //////////////////////////////////////////////////////////////
 
-typedef std::map<Point, std::set<Vertex>> graph_t;
+typedef std::map<Point, std::set<Edge>> graph_t;
 //////////////////////////////////////////////////////////////
 
 static void DrawSystem(
-    const std::set<Point>& points,
     const std::vector<Circle>& circles,
-    const std::vector<LineSegment>& lines,
+    const graph_t& graph,
     const std::vector<Point>& path,
     const std::map<size_t, std::set<Point>>& dct_circle_intersections);
 
@@ -161,8 +160,6 @@ static void neighbours(
     int c1_idx,
     const std::vector<Circle>& circles,
     graph_t& out_graph,
-    std::vector<LineSegment>& out_line_segments,
-    std::set<Point>& out_points,
     std::map<size_t, std::set<Point>>& dct_circle_points,
     const std::map<size_t, std::set<Point>>& dct_circle_intersections);
 
@@ -382,8 +379,8 @@ static void connect_points_on_circle_no_intersections(
       double th = std::acos(cos_th);
       double d_ab = th * c1.r;
 
-      out_graph[a].insert(Vertex(b, d_ab));
-      out_graph[b].insert(Vertex(a, d_ab));
+      out_graph[a].insert(Edge(b, d_ab));
+      out_graph[b].insert(Edge(a, d_ab));
     }  // for j
   }  // for i
 }
@@ -463,8 +460,8 @@ static void connect_points_on_circle(
         }
         double d_ab = d_th * c1.r;
 
-        out_graph[a].insert(Vertex(b, d_ab));
-        out_graph[b].insert(Vertex(a, d_ab));
+        out_graph[a].insert(Edge(b, d_ab));
+        out_graph[b].insert(Edge(a, d_ab));
       }  // for bi = ai+1; bi != end; ++bi
     }  // for ai = begin; ai != end
   }  // for (size_t i = si; i < circles_points.size() + si; ++i)
@@ -476,8 +473,6 @@ void neighbours(
     int c1_idx,
     const std::vector<Circle>& circles,
     graph_t& out_graph,
-    std::vector<LineSegment>& out_line_segments,
-    std::set<Point>& out_points,
     std::map<size_t, std::set<Point>>& dct_circle_points,
     const std::map<size_t, std::set<Point>>& dct_circle_intersections)
 {
@@ -504,15 +499,10 @@ void neighbours(
       double dx = pc1.x - pc2.x;
       double dy = pc1.y - pc2.y;
       double distance = std::sqrt(dx * dx + dy * dy);
-      out_graph[pc1].insert(Vertex(pc2, distance));
-      out_graph[pc2].insert(Vertex(pc1, distance));
-
-      out_points.insert(pc1);
-      out_points.insert(pc2);
-
+      out_graph[pc1].insert(Edge(pc2, distance));
+      out_graph[pc2].insert(Edge(pc1, distance));
       associate_point_with_circle(pc1, c1_idx, dct_circle_points);
       associate_point_with_circle(pc2, c2_idx, dct_circle_points);
-      out_line_segments.push_back(ls);
     }  // for l : tls
   }  // for (j = i+1; j < circles.size(); ++j)
 
@@ -557,13 +547,8 @@ double shortest_path_length(const Point& a,
                             const std::vector<Circle>& in_circles)
 {
   std::vector<Circle> circles = {Circle(a.x, a.y, 0.)};
-  for (auto in_c : in_circles) {
-    circles.push_back(Circle(in_c.ctr.x, in_c.ctr.y, in_c.r));
-  }
+  std::copy(in_circles.begin(), in_circles.end(), std::back_inserter(circles));
   circles.push_back(Circle(b.x, b.y, 0.));
-
-  std::vector<LineSegment> line_segments;
-  std::set<Point> points;
 
   // key - index of circle
   // value - set of points on this circle
@@ -578,8 +563,6 @@ double shortest_path_length(const Point& a,
                i,
                circles,
                graph,
-               line_segments,
-               points,
                dct_circle_points,
                dct_circle_intersections);
   }
@@ -593,9 +576,7 @@ double shortest_path_length(const Point& a,
   std::map<Point, Point> p;
 
   // init D, U and P
-  Point a_ = Point(a.x, a.y);
-  Point b_ = Point(b.x, b.y);
-  if (graph.find(b_) == graph.end()) {
+  if (graph.find(b) == graph.end()) {
     return -1.;
   }
 
@@ -604,7 +585,7 @@ double shortest_path_length(const Point& a,
     u.insert(std::make_pair(Point(node.first), false));
     p.insert(std::make_pair(Point(node.first), IMPOSSIBLE_POINT));
   }
-  d[a_] = 0.;
+  d[a] = 0.;
 
   for (size_t i = 0; i < graph.size(); ++i) {
     Point v;
@@ -634,14 +615,14 @@ double shortest_path_length(const Point& a,
 
 #if DEBUG
   std::vector<Point> path;
-  for (Point v = b_; v != a_ && v != IMPOSSIBLE_POINT; v = p[v]) {
+  for (Point v = b; v != a && v != IMPOSSIBLE_POINT; v = p[v]) {
     path.push_back(v);
   }
-  path.push_back(a_);
+  path.push_back(a);
   std::reverse(path.begin(), path.end());
-  DrawSystem(points, circles, line_segments, path, dct_circle_intersections);
+  DrawSystem(circles, graph, path, dct_circle_intersections);
 #endif
-  return d[b_] == INF ? -1. : d[b_];
+  return d[b] == INF ? -1. : d[b];
 }
 //////////////////////////////////////////////////////////////
 
@@ -789,72 +770,72 @@ int main(int argc, char* argv[])
   };
 
   test_case_t t76 = {
-      .a = {1, 1},
-      .b = {9, 9},
+      .a = {1 - 5, 1 - 5},
+      .b = {9 - 5, 9 - 5},
       .c =
           {
-            {0, 0, 0.64115},   {0, 1, 0.132413},   {0, 2, 0.360349},
-            {0, 3, 0.324987},  {0, 4, 0.291204},   {0, 5, 0.482743},
-            {0, 6, 0.357549},  {0, 7, 0.472708},   {0, 8, 0.487758},
-            {0, 9, 0.502299},  {0, 10, 0.291764},  {1, 0, 0.253298},
-            {1, 2, 0.289496},  {1, 3, 0.487209},   {1, 4, 0.205027},
-            {1, 5, 0.710598},  {1, 6, 0.355356},   {1, 7, 0.474757},
-            {1, 8, 0.15398},   {1, 9, 0.552585},   {1, 10, 0.354647},
-            {2, 0, 0.374451},  {2, 1, 0.417562},   {2, 2, 0.80148},
-            {2, 3, 0.226192},  {2, 4, 0.256702},   {2, 5, 0.355266},
-            {2, 6, 0.409288},  {2, 7, 0.327123},   {2, 8, 0.302255},
-            {2, 9, 0.331616},  {2, 10, 0.116894},  {3, 0, 0.461943},
-            {3, 1, 0.665481},  {3, 2, 0.472481},   {3, 3, 0.184833},
-            {3, 4, 0.332489},  {3, 5, 0.454663},   {3, 6, 0.368843},
-            {3, 7, 0.273874},  {3, 8, 0.499421},   {3, 9, 0.282398},
-            {3, 10, 0.393656}, {4, 0, 0.303524},   {4, 1, 0.395856},
-            {4, 2, 0.689242},  {4, 3, 0.347418},   {4, 4, 0.366592},
-            {4, 5, 0.283776},  {4, 6, 0.293723},   {4, 7, 0.598069},
-            {4, 8, 0.327934},  {4, 9, 0.693837},   {4, 10, 0.371845},
-            {5, 0, 0.530865},  {5, 1, 0.485497},   {5, 2, 0.539198},
-            {5, 3, 0.21921},   {5, 4, 0.373822},   {5, 5, 0.621798},
-            {5, 6, 0.344001},  {5, 7, 0.498881},   {5, 8, 0.314385},
-            {5, 9, 0.323955},  {5, 10, 0.377122},  {6, 0, 0.728114},
-            {6, 1, 0.572922},  {6, 2, 0.600398},   {6, 3, 0.731823},
-            {6, 4, 0.607078},  {6, 5, 0.548686},   {6, 6, 0.372388},
-            {6, 7, 0.341927},  {6, 8, 0.342702},   {6, 9, 0.403859},
-            {6, 10, 0.468459}, {7, 0, 0.475139},   {7, 1, 0.670751},
-            {7, 2, 0.501308},  {7, 3, 0.599921},   {7, 4, 0.394143},
-            {7, 5, 0.429276},  {7, 6, 0.561681},   {7, 7, 0.445538},
-            {7, 8, 0.626099},  {7, 9, 0.786562},   {7, 10, 0.255453},
-            {8, 0, 0.223515},  {8, 1, 0.331156},   {8, 2, 0.176681},
-            {8, 3, 0.695574},  {8, 4, 0.178912},   {8, 5, 0.310622},
-            {8, 6, 0.445796},  {8, 7, 0.446313},   {8, 8, 0.0646119},
-            {8, 9, 0.545403},  {8, 10, 0.462326},  {9, 0, 0.513944},
-            {9, 1, 0.743972},  {9, 2, 0.505344},   {9, 3, 0.394114},
-            {9, 4, 0.234896},  {9, 5, 0.593275},   {9, 6, 0.420085},
-            {9, 7, 0.405696},  {9, 8, 0.626986},   {9, 10, 0.532113},
-            {10, 0, 0.352077}, {10, 1, 0.478829},  {10, 2, 0.41936},
-            {10, 3, 0.759827}, {10, 4, 0.662362},  {10, 5, 0.409371},
-            {10, 6, 0.126773}, {10, 7, 0.326123},  {10, 8, 0.409758},
-            {10, 9, 0.383666}, {10, 10, 0.583833},
+            {0 - 5, 0 - 5, 0.64115},    {0 - 5, 1 - 5, 0.132413},
+            {0 - 5, 2 - 5, 0.360349},   {0 - 5, 3 - 5, 0.324987},
+            {0 - 5, 4 - 5, 0.291204},   {0 - 5, 5 - 5, 0.482743},
+            {0 - 5, 6 - 5, 0.357549},   {0 - 5, 7 - 5, 0.472708},
+            {0 - 5, 8 - 5, 0.487758},   {0 - 5, 9 - 5, 0.502299},
+            {0 - 5, 10 - 5, 0.291764},  {1 - 5, 0 - 5, 0.253298},
+            {1 - 5, 2 - 5, 0.289496},   {1 - 5, 3 - 5, 0.487209},
+            {1 - 5, 4 - 5, 0.205027},   {1 - 5, 5 - 5, 0.710598},
+            {1 - 5, 6 - 5, 0.355356},   {1 - 5, 7 - 5, 0.474757},
+            {1 - 5, 8 - 5, 0.15398},    {1 - 5, 9 - 5, 0.552585},
+            {1 - 5, 10 - 5, 0.354647},  {2 - 5, 0 - 5, 0.374451},
+            {2 - 5, 1 - 5, 0.417562},   {2 - 5, 2 - 5, 0.80148},
+            {2 - 5, 3 - 5, 0.226192},   {2 - 5, 4 - 5, 0.256702},
+            {2 - 5, 5 - 5, 0.355266},   {2 - 5, 6 - 5, 0.409288},
+            {2 - 5, 7 - 5, 0.327123},   {2 - 5, 8 - 5, 0.302255},
+            {2 - 5, 9 - 5, 0.331616},   {2 - 5, 10 - 5, 0.116894},
+            {3 - 5, 0 - 5, 0.461943},   {3 - 5, 1 - 5, 0.665481},
+            {3 - 5, 2 - 5, 0.472481},   {3 - 5, 3 - 5, 0.184833},
+            {3 - 5, 4 - 5, 0.332489},   {3 - 5, 5 - 5, 0.454663},
+            {3 - 5, 6 - 5, 0.368843},   {3 - 5, 7 - 5, 0.273874},
+            {3 - 5, 8 - 5, 0.499421},   {3 - 5, 9 - 5, 0.282398},
+            {3 - 5, 10 - 5, 0.393656},  {4 - 5, 0 - 5, 0.303524},
+            {4 - 5, 1 - 5, 0.395856},   {4 - 5, 2 - 5, 0.689242},
+            {4 - 5, 3 - 5, 0.347418},   {4 - 5, 4 - 5, 0.366592},
+            {4 - 5, 5 - 5, 0.283776},   {4 - 5, 6 - 5, 0.293723},
+            {4 - 5, 7 - 5, 0.598069},   {4 - 5, 8 - 5, 0.327934},
+            {4 - 5, 9 - 5, 0.693837},   {4 - 5, 10 - 5, 0.371845},
+            {5 - 5, 0 - 5, 0.530865},   {5 - 5, 1 - 5, 0.485497},
+            {5 - 5, 2 - 5, 0.539198},   {5 - 5, 3 - 5, 0.21921},
+            {5 - 5, 4 - 5, 0.373822},   {5 - 5, 5 - 5, 0.621798},
+            {5 - 5, 6 - 5, 0.344001},   {5 - 5, 7 - 5, 0.498881},
+            {5 - 5, 8 - 5, 0.314385},   {5 - 5, 9 - 5, 0.323955},
+            {5 - 5, 10 - 5, 0.377122},  {6 - 5, 0 - 5, 0.728114},
+            {6 - 5, 1 - 5, 0.572922},   {6 - 5, 2 - 5, 0.600398},
+            {6 - 5, 3 - 5, 0.731823},   {6 - 5, 4 - 5, 0.607078},
+            {6 - 5, 5 - 5, 0.548686},   {6 - 5, 6 - 5, 0.372388},
+            {6 - 5, 7 - 5, 0.341927},   {6 - 5, 8 - 5, 0.342702},
+            {6 - 5, 9 - 5, 0.403859},   {6 - 5, 10 - 5, 0.468459},
+            {7 - 5, 0 - 5, 0.475139},   {7 - 5, 1 - 5, 0.670751},
+            {7 - 5, 2 - 5, 0.501308},   {7 - 5, 3 - 5, 0.599921},
+            {7 - 5, 4 - 5, 0.394143},   {7 - 5, 5 - 5, 0.429276},
+            {7 - 5, 6 - 5, 0.561681},   {7 - 5, 7 - 5, 0.445538},
+            {7 - 5, 8 - 5, 0.626099},   {7 - 5, 9 - 5, 0.786562},
+            {7 - 5, 10 - 5, 0.255453},  {8 - 5, 0 - 5, 0.223515},
+            {8 - 5, 1 - 5, 0.331156},   {8 - 5, 2 - 5, 0.176681},
+            {8 - 5, 3 - 5, 0.695574},   {8 - 5, 4 - 5, 0.178912},
+            {8 - 5, 5 - 5, 0.310622},   {8 - 5, 6 - 5, 0.445796},
+            {8 - 5, 7 - 5, 0.446313},   {8 - 5, 8 - 5, 0.0646119},
+            {8 - 5, 9 - 5, 0.545403},   {8 - 5, 10 - 5, 0.462326},
+            {9 - 5, 0 - 5, 0.513944},   {9 - 5, 1 - 5, 0.743972},
+            {9 - 5, 2 - 5, 0.505344},   {9 - 5, 3 - 5, 0.394114},
+            {9 - 5, 4 - 5, 0.234896},   {9 - 5, 5 - 5, 0.593275},
+            {9 - 5, 6 - 5, 0.420085},   {9 - 5, 7 - 5, 0.405696},
+            {9 - 5, 8 - 5, 0.626986},   {9 - 5, 10 - 5, 0.532113},
+            {10 - 5, 0 - 5, 0.352077},  {10 - 5, 1 - 5, 0.478829},
+            {10 - 5, 2 - 5, 0.41936},   {10 - 5, 3 - 5, 0.759827},
+            {10 - 5, 4 - 5, 0.662362},  {10 - 5, 5 - 5, 0.409371},
+            {10 - 5, 6 - 5, 0.126773},  {10 - 5, 7 - 5, 0.326123},
+            {10 - 5, 8 - 5, 0.409758},  {10 - 5, 9 - 5, 0.383666},
+            {10 - 5, 10 - 5, 0.583833},
             },
       .expected = 13.7274,
-  };
-
-  test_case_t t76_1 = {
-      .a = {-1, -1 - 2},
-      .b = {2, 4 - 2},
-      .c =
-          {
-            {0, 0 - 2, 0.429276},
-            {0, 1 - 2, 0.561681},
-            {0, 2 - 2, 0.445538},
-            {0, 3 - 2, 0.626099},
-            {0, 4 - 2, 0.786562},
-            {1, 1 - 2, 0.445796},
-            {1, 2 - 2, 0.446313},
-            /* {2, 0 - 2, 0.593275}, */
-              /* {2, 1 - 2, 0.420085}, */
-              /* {2, 2 - 2, 0.405696}, */
-              {2, 3 - 2, 0.626986},
-            },
-      .expected = 0.,
   };
 
   test_case_t* test_cases[] = {
@@ -870,7 +851,6 @@ int main(int argc, char* argv[])
       /* &tA, */
       /* &tB, */
       &t76,
-      /* &t76_1, */
       nullptr,
   };
 
@@ -894,16 +874,15 @@ int main(int argc, char* argv[])
 /////////////////////////////////////////////////////////////////
 
 void DrawSystem(
-    const std::set<Point>& points,
     const std::vector<Circle>& circles,
-    const std::vector<LineSegment>& lines,
+    const graph_t& graph,
     const std::vector<Point>& path,
     const std::map<size_t, std::set<Point>>& dct_circle_intersections)
 {
   const char* wn = "TipToe through the circle";
-  const double scale = 100.;
-  const int width = 900;
-  const int height = 700;
+  const double scale = 90.;
+  const int width = 1000;
+  const int height = 800;
   const int center_offset_x = width / 2;
   const int center_offset_y = height / 2;
   cv::Mat mat_img(height, width, CV_8UC4, cv::Scalar(255, 255, 255));
@@ -961,22 +940,22 @@ void DrawSystem(
              color_point);
   }
 
-  for (auto& ls : lines) {
-    cv::line(mat_img,
-             cv::Point(ls.a.x * scale + center_offset_x,
-                       ls.a.y * scale + center_offset_y),
-             cv::Point(ls.b.x * scale + center_offset_x,
-                       ls.b.y * scale + center_offset_y),
-             color_line);
-  }
+  for (const auto& v : graph) {
+    cv::circle(mat_img,
+               cv::Point(v.first.x * scale + center_offset_x,
+                         v.first.y * scale + center_offset_y),
+               1,
+               color_point,
+               -1);
 
-  for (auto& p : points) {
-    cv::circle(
-        mat_img,
-        cv::Point(p.x * scale + center_offset_x, p.y * scale + center_offset_y),
-        1,
-        color_point,
-        -1);
+    for (const auto& p : v.second) {
+      cv::line(mat_img,
+               cv::Point(v.first.x * scale + center_offset_x,
+                         v.first.y * scale + center_offset_y),
+               cv::Point(p.point.x * scale + center_offset_x,
+                         p.point.y * scale + center_offset_y),
+               color_line);
+    }
   }
 
   for (auto& ci : dct_circle_intersections) {
