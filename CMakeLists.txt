@@ -7,6 +7,19 @@ project(CodewarsCPP)            # this sets the project name
 ###############################################################################
 
 set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
+
+set(CMAKE_CXX_STANDARD 20)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+if(CMAKE_BUILD_TYPE MATCHES Debug)
+  message("Debug build.")
+elseif(CMAKE_BUILD_TYPE MATCHES Release)
+  message("Release build.")
+else()
+  message("Some other build type. Setting up default = Debug")
+  set(CMAKE_BUILD_TYPE Debug)
+endif()
+
 # These instructions search the directory tree when cmake is
 # invoked and put all files that match the pattern in the variables 
 # `sources` and `data`.
@@ -32,8 +45,9 @@ target_include_directories(codewars_cpp PRIVATE inc)
 # Just for codewars_cpp add some compiler flags.
 
 set(warning_level -Wall -Wextra -pedantic)
-set(cxxflags -pipe -O0 -g -std=gnu++2a)
-target_compile_options(codewars_cpp PUBLIC ${warning_level} ${cxxflags})
+set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2")
+set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
+target_compile_options(codewars_cpp PUBLIC ${warning_level})
 
 # This copies all resource files in the build directory.
 # We need this, because we want to work with paths relative to the executable.
