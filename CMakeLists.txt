@@ -38,16 +38,16 @@ include_directories( ${OpenCV_INCLUDE_DIRS} )
 
 # The data is just added to the executable, because in some IDEs (QtCreator) 
 # files are invisible when they are not explicitly part of the project.
-add_executable(codewars_cpp ${sources} ${data})
+add_executable(${PROJECT_NAME} ${sources} ${data})
 
 # This allows to include files relative to the root of the src directory with a <> pair
-target_include_directories(codewars_cpp PRIVATE inc)
-# Just for codewars_cpp add some compiler flags.
+target_include_directories(${PROJECT_NAME} PRIVATE inc)
+# Just for ${PROJECT_NAME} add some compiler flags.
 
 set(warning_level -Wall -Wextra -pedantic)
 set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2")
 set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
-target_compile_options(codewars_cpp PUBLIC ${warning_level})
+target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level})
 
 # This copies all resource files in the build directory.
 # We need this, because we want to work with paths relative to the executable.
@@ -61,7 +61,7 @@ file(COPY ${data} DESTINATION resources)
 # that we need to link into the program.
 # find_package(Boost 1.36.0 COMPONENTS filesystem system REQUIRED)
 
-target_link_libraries(codewars_cpp PUBLIC
+target_link_libraries(${PROJECT_NAME} PUBLIC
   ${OpenCV_LIBS}
   # here you can add any library dependencies
 )
@@ -87,11 +87,11 @@ if(GTEST_FOUND)
 
   # This allows us to use the executable as a link library, and inherit all 
   # linker options and library dependencies from it, by simply adding it as dependency.
-  set_target_properties(codewars_cpp PROPERTIES ENABLE_EXPORTS on)
+  set_target_properties(${PROJECT_NAME} PROPERTIES ENABLE_EXPORTS on)
 
   target_link_libraries(unit_tests PUBLIC
     ${GTEST_BOTH_LIBRARIES}
-    codewars_cpp
+    ${PROJECT_NAME}
   )
 
   target_include_directories(unit_tests PUBLIC
@@ -106,12 +106,12 @@ endif()
 
 # All install commands get the same destination. this allows us to use paths
 # relative to the executable.
-install(TARGETS codewars_cpp DESTINATION example_destination)
+install(TARGETS ${PROJECT_NAME} DESTINATION example_destination)
 
 # This is basically a repeat of the file copy instruction that copies the
 # resources in the build directory, but here we tell cmake that we want it
 # in the package.
-install(DIRECTORY resources DESTINATION codewars_cpp_destination)
+install(DIRECTORY resources DESTINATION ${PROJECT_NAME}_destination)
 
 # Now comes everything we need, to create a package
 # there are a lot more variables you can set, and some
