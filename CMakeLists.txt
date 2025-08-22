@@ -17,7 +17,7 @@ elseif(CMAKE_BUILD_TYPE MATCHES Release)
   message("Release build.")
 else()
   message("Some other build type. Setting up default = Debug")
-  set(CMAKE_BUILD_TYPE Debug)
+  set(CMAKE_BUILD_TYPE Release)
 endif()
 
 # These instructions search the directory tree when cmake is
@@ -32,6 +32,12 @@ file(GLOB_RECURSE data resources/*)
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 
+find_package(OpenMP)
+if (OPENMP_FOUND)
+    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+endif()
 ###############################################################################
 ## target definitions #########################################################
 ###############################################################################
@@ -45,6 +51,7 @@ target_include_directories(${PROJECT_NAME} PRIVATE inc)
 # Just for ${PROJECT_NAME} add some compiler flags.
 
 set(warning_level -Wall -Wextra -pedantic)
+set(sse_flags -msse -msse2)
 set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2")
 set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
 target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level})
