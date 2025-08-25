@@ -4,7 +4,6 @@
 #include <xmmintrin.h>
 
 #include <chrono>
-#include <iomanip>
 
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char *argv[]) {
@@ -21,10 +20,9 @@ static void rot13_sse(char *str, size_t n);
 void p128_hex_u8(__m128i in) {
   alignas(16) uint8_t v[16];
   _mm_store_si128((__m128i *)v, in);
-  std::cout << "v16_u8: " << std::hex << std::setw(2) << std::setfill('0')
-            << v[0] << v[1] << v[2] << v[3] << " | " << v[4] << v[5] << v[6]
-            << v[7] << " | " << v[8] << v[9] << v[10] << v[11] << " | " << v[12]
-            << v[13] << v[14] << v[15] << "\n";
+  printf("%x %x %x %x | %x %x %x %x | %x %x %x %x | %x %x %x %x\n", v[0], v[1],
+         v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12],
+         v[13], v[14], v[15]);
 }
 //////////////////////////////////////////////////////////////
 
@@ -36,11 +34,44 @@ int main(int argc, char *argv[]) {
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
-  const int repeats = 1000000;
+  const int repeats = 3000000;
   const int iterations = 100;
-  const size_t buf_len = pattern.size() * repeats + 1;
+  const size_t buff_len = pattern.size() * repeats + 1;
+  const size_t cpu_n = std::thread::hardware_concurrency();
+
+  // SSE batches and offsets
+  size_t sse_bs = buff_len / cpu_n;
+  while (sse_bs % 16) {
+    --sse_bs;
+  }
+
+  std::vector<size_t> lst_sse_batch_size(cpu_n, sse_bs);
+  const size_t sse_remind = buff_len - (sse_bs * cpu_n);
+  lst_sse_batch_size.back() += sse_remind;
+
+  std::vector<size_t> lst_sse_batch_offset(cpu_n, 0);
+  for (size_t i = 1; i < lst_sse_batch_size.size(); ++i) {
+    lst_sse_batch_offset[i] =
+        lst_sse_batch_offset[i - 1] + lst_sse_batch_size[i - 1];
+  }
+  //////////////////////////////////////////////////////////////
+
+  // naive batches and offsets
+  size_t naive_bs = buff_len / cpu_n;
+  std::vector<size_t> lst_naive_batch_size(cpu_n, naive_bs);
+  const size_t naive_remind = buff_len - (naive_bs * cpu_n);
+  for (size_t i = 0; i < naive_remind; ++i) {
+    ++lst_naive_batch_size[i];
+  }
+  std::vector<size_t> lst_naive_batch_offset(cpu_n, 0);
+  for (size_t i = 1; i < lst_naive_batch_size.size(); ++i) {
+    lst_naive_batch_offset[i] =
+        lst_naive_batch_offset[i - 1] + lst_naive_batch_size[i - 1];
+  }
+  //////////////////////////////////////////////////////////////
+
   std::string orig_big_input;
-  orig_big_input.reserve(buf_len);
+  orig_big_input.reserve(buff_len);
 
   // Fill original buffer
   for (int i = 0; i < repeats; ++i) {
@@ -58,71 +89,79 @@ int main(int argc, char *argv[]) {
   // (volatile sink so results are observable)
   volatile uint64_t sink_sse = 0, sink_naive = 0;
 
-  std::cout << "Buffer size: " << buf_len / (1024*1024) << " MBs\n";
-  std::cout << "Iterations per function: " << iterations << "\n";
-
-  // Benchmark rot13_sse
+  // Benchmark rot13_naive
   auto t1 = std::chrono::high_resolution_clock::now();
   for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buf_len + 1);
-    rot13_sse(work, buf_len + 1);
+    memcpy(work, orig_big_input.c_str(), buff_len + 1);
+    rot13_naive(work, buff_len + 1);
+
     // Touch the data so the call can't be optimized out
     // (simple byte sum; not performance-critical)
     uint64_t sum = 0;
-    for (size_t i = 0; i < buf_len; ++i)
-      sum += (unsigned char)work[i];
-    sink_sse += sum;
-  }
-  auto t2 = high_resolution_clock::now();
-  auto dur_sse = t2 - t1;
-  std::cout << "rot13_sse: " << duration_cast<milliseconds>(dur_sse).count()
-            << " ms.\n";
-
-  // Benchmark rot13_naive
-  for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buf_len + 1);
-    rot13_naive(work, buf_len + 1);
-    uint64_t sum = 0;
-    for (size_t i = 0; i < buf_len; ++i)
-      sum += (unsigned char)work[i];
+    for (size_t i = 0; i < buff_len; ++i)
+      sum += static_cast<uint8_t>(work[i]);
     sink_naive += sum;
   }
-  auto t3 = high_resolution_clock::now();
-  auto dur_naive = t3 - t2;
+  auto t2 = high_resolution_clock::now();
+  auto dur_naive = t2 - t1;
   std::cout << "rot13_naive: " << duration_cast<milliseconds>(dur_naive).count()
             << " ms.\n";
 
-  // Benchmark rot13_sse_parallel
-#pragma omp parallel for schedule(dynamic)
+  // Benchmark rot13_sse
   for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buf_len + 1);
-    rot13_sse(work, buf_len + 1);
+    memcpy(work, orig_big_input.c_str(), buff_len + 1);
+    rot13_sse(work, buff_len + 1);
+
     uint64_t sum = 0;
-    for (size_t i = 0; i < buf_len; ++i)
-      sum += (unsigned char)work[i];
-    sink_naive += sum;
+    for (size_t i = 0; i < buff_len; ++i)
+      sum += static_cast<uint8_t>(work[i]);
+    sink_sse += sum;
   }
-  auto t4 = high_resolution_clock::now();
-  auto dur_sse_parallel = t4 - t3;
-  std::cout << "rot13_sse parallel: "
-            << duration_cast<milliseconds>(dur_sse_parallel).count()
+  auto t3 = high_resolution_clock::now();
+  auto dur_sse = t3 - t2;
+  std::cout << "rot13_sse: " << duration_cast<milliseconds>(dur_sse).count()
             << " ms.\n";
 
   // Benchmark rot13_naive parallel
-#pragma omp parallel for schedule(dynamic)
   for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buf_len + 1);
-    rot13_naive(work, buf_len + 1);
+    memcpy(work, orig_big_input.c_str(), buff_len + 1);
+
+#pragma omp parallel for
+    for (size_t i = 0; i < lst_naive_batch_size.size(); ++i) {
+      rot13_naive(work + lst_naive_batch_offset[i], lst_naive_batch_size[i]);
+    }
+
     uint64_t sum = 0;
-    for (size_t i = 0; i < buf_len; ++i)
-      sum += (unsigned char)work[i];
+    for (size_t i = 0; i < buff_len; ++i)
+      sum += static_cast<uint8_t>(work[i]);
+    sink_naive += sum;
+  }
+
+  auto t4 = high_resolution_clock::now();
+  auto dur_naive_parallel = t4 - t3;
+  std::cout << "rot13_naive parallel: "
+            << duration_cast<milliseconds>(dur_naive_parallel).count()
+            << " ms.\n";
+
+  // Benchmark rot13_sse_parallel
+#pragma omp parallel for
+  for (int it = 0; it < iterations; ++it) {
+    memcpy(work, orig_big_input.c_str(), buff_len + 1);
+
+    for (size_t i = 0; i < lst_sse_batch_size.size(); ++i) {
+      rot13_sse(work + lst_sse_batch_offset[i], lst_sse_batch_size[i]);
+    }
+
+    uint64_t sum = 0;
+    for (size_t i = 0; i < buff_len; ++i)
+      sum += static_cast<uint8_t>(work[i]);
     sink_naive += sum;
   }
   auto t5 = high_resolution_clock::now();
-  auto dur_naive_parallel = t5 - t4;
+  auto dur_sse_parallel = t5 - t4;
 
-  std::cout << "rot13_naive parallel: "
-            << duration_cast<milliseconds>(dur_naive_parallel).count()
+  std::cout << "rot13_sse parallel: "
+            << duration_cast<milliseconds>(dur_sse_parallel).count()
             << " ms.\n";
 
   // Use sinks (just print to ensure side-effect)
@@ -145,7 +184,7 @@ char rot13(char c) {
 void rot13_naive(char *str, size_t n) {
   size_t i = 0;
   char *s = str;
-  for (; *s && i < n; ++s) {
+  for (; *s && i < n; ++s, ++i) {
     *s = rot13(*s);
   }
 }
@@ -179,7 +218,8 @@ void rot13_sse(char *str, size_t n) {
 
   // for analigned data we use naive approach
   char *s = str;
-  for (; s != (char *)p_aligned; ++s) {
+  size_t i = 0;
+  for (; s != (char *)p_aligned && i < n; ++s, ++i) {
     *s = rot13(*s);
   }
 
@@ -187,7 +227,7 @@ void rot13_sse(char *str, size_t n) {
   __m128i zero = _mm_setzero_si128();
   __m128i ffff = _mm_cmpeq_epi8(zero, zero);
 
-  for (; true; s += 16) {
+  for (; i < n; s += 16, i += 16) {
     __m128i orig = _mm_load_si128((__m128i *)s);
     __m128i eq_zero = _mm_cmpeq_epi8(orig, zero);
     int mask = _mm_movemask_epi8(eq_zero);
@@ -223,7 +263,7 @@ void rot13_sse(char *str, size_t n) {
     _mm_store_si128((__m128i *)s, orig);
   }
 
-  for (; *s; ++s) {
+  for (; *s && i < n; ++s, ++i) {
     *s = rot13(*s);
   }
 }
