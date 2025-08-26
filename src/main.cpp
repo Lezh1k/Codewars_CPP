@@ -4,6 +4,8 @@
 #include <xmmintrin.h>
 
 #include <chrono>
+#include <functional>
+#include <thread>
 
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char *argv[]) {
@@ -17,6 +19,23 @@ static char rot13(char c);
 static void rot13_naive(char *str, size_t n);
 static void rot13_sse(char *str, size_t n);
 
+struct func_profiler {
+  std::string m_name;
+  std::chrono::time_point<std::chrono::high_resolution_clock> m_start;
+
+  func_profiler() = delete;
+  func_profiler(const std::string &name)
+      : m_name(name), m_start(std::chrono::high_resolution_clock::now()) {}
+  ~func_profiler() {
+    auto dur = std::chrono::high_resolution_clock::now() - m_start;
+    std::cout
+        << m_name << ": "
+        << std::chrono::duration_cast<std::chrono::milliseconds>(dur).count()
+        << " ms.\n";
+  }
+};
+//////////////////////////////////////////////////////////////
+
 void p128_hex_u8(__m128i in) {
   alignas(16) uint8_t v[16];
   _mm_store_si128((__m128i *)v, in);
@@ -24,6 +43,19 @@ void p128_hex_u8(__m128i in) {
          v[2], v[3], v[4], v[5], v[6], v[7], v[8], v[9], v[10], v[11], v[12],
          v[13], v[14], v[15]);
 }
+//////////////////////////////////////////////////////////////
+
+struct benchmark {
+  std::string m_name;
+  std::function<void()> m_func;
+
+  // Accumulators to prevent the compiler from optimizing work away
+  // (volatile sink so results are observable)
+  volatile uint64_t m_sink;
+  benchmark() = delete;
+  benchmark(const std::string &name, std::function<void()> &&func)
+      : m_name(name), m_func(func), m_sink(0) {}
+};
 //////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
@@ -34,8 +66,8 @@ int main(int argc, char *argv[]) {
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
-  const int repeats = 3000000;
-  const int iterations = 100;
+  const int repeats = 90000000;
+  const int iterations = 1;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
 
@@ -85,87 +117,83 @@ int main(int argc, char *argv[]) {
     return 1;
   }
 
-  // Accumulators to prevent the compiler from optimizing work away
-  // (volatile sink so results are observable)
-  volatile uint64_t sink_sse = 0, sink_naive = 0;
+  std::vector<benchmark> benchmarks = {
+      benchmark("naive", [work, buff_len]() { rot13_naive(work, buff_len); }),
+      benchmark("sse", [work, buff_len]() { rot13_sse(work, buff_len); }),
+      benchmark(
+          "naive parallel",
+          [work, &lst_naive_batch_size, &lst_naive_batch_offset, cpu_n]() {
+            std::vector<std::thread> threads(cpu_n);
+            for (size_t i = 0; i < cpu_n; ++i) {
+              threads[i] = std::thread(
+                  [work, &lst_naive_batch_size, &lst_naive_batch_offset, i]() {
+                    rot13_naive(work + lst_naive_batch_offset[i],
+                                lst_naive_batch_size[i]);
+                  });
+              cpu_set_t cpuset;
+              CPU_ZERO(&cpuset);
+              CPU_SET(i, &cpuset);
+              int rc = pthread_setaffinity_np(threads[i].native_handle(),
+                                              sizeof(cpu_set_t), &cpuset);
+              if (rc != 0) {
+                std::cerr << "Error calling pthread_setaffinity_np: " << rc
+                          << "\n";
+              }
+            }
 
-  // Benchmark rot13_naive
-  auto t1 = std::chrono::high_resolution_clock::now();
-  for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buff_len + 1);
-    rot13_naive(work, buff_len + 1);
+            for (auto &t : threads) {
+              if (!t.joinable())
+                continue;
+              t.join();
+            }
+          }),
+      benchmark("sse parallel",
+                [work, &lst_sse_batch_size, &lst_sse_batch_offset, cpu_n]() {
+                  std::vector<std::thread> threads(cpu_n);
+                  for (size_t i = 0; i < cpu_n; ++i) {
+                    threads[i] = std::thread([work, &lst_sse_batch_size,
+                                              &lst_sse_batch_offset, i]() {
+                      rot13_sse(work + lst_sse_batch_offset[i],
+                                lst_sse_batch_size[i]);
+                    });
+                    cpu_set_t cpuset;
+                    CPU_ZERO(&cpuset);
+                    CPU_SET(i, &cpuset);
+                    int rc = pthread_setaffinity_np(threads[i].native_handle(),
+                                                    sizeof(cpu_set_t), &cpuset);
+                    if (rc != 0) {
+                      std::cerr
+                          << "Error calling pthread_setaffinity_np: " << rc
+                          << "\n";
+                    }
+                  }
 
-    // Touch the data so the call can't be optimized out
-    // (simple byte sum; not performance-critical)
-    uint64_t sum = 0;
-    for (size_t i = 0; i < buff_len; ++i)
-      sum += static_cast<uint8_t>(work[i]);
-    sink_naive += sum;
-  }
-  auto t2 = high_resolution_clock::now();
-  auto dur_naive = t2 - t1;
-  std::cout << "rot13_naive: " << duration_cast<milliseconds>(dur_naive).count()
-            << " ms.\n";
+                  for (auto &t : threads) {
+                    if (!t.joinable())
+                      continue;
+                    t.join();
+                  }
+                }),
+  };
 
-  // Benchmark rot13_sse
-  for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buff_len + 1);
-    rot13_sse(work, buff_len + 1);
+  std::cout << "processing text: " << buff_len / (1024*1024) << " MB\n";
 
-    uint64_t sum = 0;
-    for (size_t i = 0; i < buff_len; ++i)
-      sum += static_cast<uint8_t>(work[i]);
-    sink_sse += sum;
-  }
-  auto t3 = high_resolution_clock::now();
-  auto dur_sse = t3 - t2;
-  std::cout << "rot13_sse: " << duration_cast<milliseconds>(dur_sse).count()
-            << " ms.\n";
+  for (benchmark &b : benchmarks) {
+    func_profiler p(b.m_name);
+    for (int i = 0; i < iterations; ++i) {
+      memcpy(work, orig_big_input.c_str(), buff_len);
+      b.m_func();
 
-  // Benchmark rot13_naive parallel
-  for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buff_len + 1);
-
-#pragma omp parallel for
-    for (size_t i = 0; i < lst_naive_batch_size.size(); ++i) {
-      rot13_naive(work + lst_naive_batch_offset[i], lst_naive_batch_size[i]);
+      // Touch the data so the call can't be optimized out
+      // (simple byte sum; not performance-critical)
+      uint64_t sum = 0;
+      for (size_t i = 0; i < buff_len; ++i)
+        sum += static_cast<uint8_t>(work[i]);
+      b.m_sink += sum;
     }
 
-    uint64_t sum = 0;
-    for (size_t i = 0; i < buff_len; ++i)
-      sum += static_cast<uint8_t>(work[i]);
-    sink_naive += sum;
+    std::cout << "(ignore) sink " << b.m_name << " : " << b.m_sink << "\n";
   }
-
-  auto t4 = high_resolution_clock::now();
-  auto dur_naive_parallel = t4 - t3;
-  std::cout << "rot13_naive parallel: "
-            << duration_cast<milliseconds>(dur_naive_parallel).count()
-            << " ms.\n";
-
-  // Benchmark rot13_sse_parallel
-#pragma omp parallel for
-  for (int it = 0; it < iterations; ++it) {
-    memcpy(work, orig_big_input.c_str(), buff_len + 1);
-
-    for (size_t i = 0; i < lst_sse_batch_size.size(); ++i) {
-      rot13_sse(work + lst_sse_batch_offset[i], lst_sse_batch_size[i]);
-    }
-
-    uint64_t sum = 0;
-    for (size_t i = 0; i < buff_len; ++i)
-      sum += static_cast<uint8_t>(work[i]);
-    sink_naive += sum;
-  }
-  auto t5 = high_resolution_clock::now();
-  auto dur_sse_parallel = t5 - t4;
-
-  std::cout << "rot13_sse parallel: "
-            << duration_cast<milliseconds>(dur_sse_parallel).count()
-            << " ms.\n";
-
-  // Use sinks (just print to ensure side-effect)
-  std::cout << "(ignore) sinks: sse= " << sink_sse << " naive= " << sink_naive;
 
   free(work); // because of strdup
   return 0;
