@@ -22,6 +22,7 @@ __global__ void __cuda_rot13_vectorized(char *str, size_t n) {
   size_t idx = blockIdx.x * blockDim.x + threadIdx.x;
   size_t i = idx * 4;
 
+  [[likely]]
   if (i + 3 < n) {
     uchar4 *vec = reinterpret_cast<uchar4 *>(str);
     uchar4 v = vec[idx];
@@ -43,22 +44,24 @@ __global__ void __cuda_rot13_vectorized(char *str, size_t n) {
 //////////////////////////////////////////////////////////////
 
 void cuda_rot13_vect(char *str, size_t n) {
-  size_t numThreads = 1024; // got from left heel
-  size_t numBlocks = (n + 3) / 4 / numThreads;
+  size_t threads_n = 512; // got from left heel
+  size_t blocks_n = (n + 3) / 4 / threads_n;
   char *pd_str;
   cudaMalloc((void **)&pd_str, n);
   cudaMemcpy(pd_str, str, sizeof(char) * n, cudaMemcpyHostToDevice);
-  __cuda_rot13_vectorized<<<numBlocks, numThreads>>>(pd_str, n);
+  __cuda_rot13_vectorized<<<blocks_n, threads_n>>>(pd_str, n);
   cudaMemcpy(str, pd_str, sizeof(char) * n, cudaMemcpyDeviceToHost);
   cudaFree((void *)pd_str);
 }
 //////////////////////////////////////////////////////////////
 
 void cuda_rot13(char *str, size_t n) {
+  size_t threads_n = 512; // got from ktulhu
+  size_t blocks_n = 256;
   char *pd_str;
   cudaMalloc((void **)&pd_str, n);
   cudaMemcpy(pd_str, str, sizeof(char) * n, cudaMemcpyHostToDevice);
-  __cuda_rot13<<<1, 1>>>(pd_str, n);
+  __cuda_rot13<<<blocks_n, threads_n>>>(pd_str, n); // got numbers from ktulhu
   cudaMemcpy(str, pd_str, sizeof(char) * n, cudaMemcpyDeviceToHost);
   cudaFree((void *)pd_str);
 }
