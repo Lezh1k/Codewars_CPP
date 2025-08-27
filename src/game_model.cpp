@@ -4,8 +4,7 @@
 #include <queue>
 
 Game::Game(const std::vector<std::vector<int32_t>> &start_state)
-    : m_field_size(start_state.size()),
-      m_start_state(start_state),
+    : m_field_size(start_state.size()), m_start_state(start_state),
       m_goal_state(start_state.size()) {
   // init goal state
   int32_t k = 0;
@@ -26,9 +25,7 @@ bool Game::is_goal(const vertex &game_state) const {
 
 std::vector<vertex_coord>
 Game::bfs(const std::vector<std::vector<bool>> &lst_in_place,
-          const vertex_coord &src,
-          const vertex_coord &dst)
-{
+          const vertex_coord &src, const vertex_coord &dst) {
   std::queue<vertex_coord> q;
   std::vector<std::vector<bool>> used(m_field_size);
   std::vector<std::vector<vertex_coord>> parents(m_field_size);
@@ -39,7 +36,7 @@ Game::bfs(const std::vector<std::vector<bool>> &lst_in_place,
 
   q.push(src);
   used[src.row][src.col] = true;
-  parents[src.row][src.col] = vertex_coord(-1,-1);
+  parents[src.row][src.col] = vertex_coord(-1, -1);
 
   while (!q.empty()) {
     vertex_coord v = q.front();
@@ -55,16 +52,15 @@ Game::bfs(const std::vector<std::vector<bool>> &lst_in_place,
       int32_t nr = v.row + delta_r[k];
       int32_t nc = v.col + delta_c[k];
 
-      if (nr >= m_field_size || nc >= m_field_size ||
-          nr < 0 || nc < 0)
-        continue; //out of bounds
+      if (nr >= m_field_size || nc >= m_field_size || nr < 0 || nc < 0)
+        continue; // out of bounds
 
       if (lst_in_place[nr][nc])
         continue;
 
       if (!used[nr][nc]) {
         used[nr][nc] = true;
-        q.push(vertex_coord(nr,nc));
+        q.push(vertex_coord(nr, nc));
         parents[nr][nc] = v;
       }
     }
@@ -84,25 +80,23 @@ Game::bfs(const std::vector<std::vector<bool>> &lst_in_place,
 
 std::vector<int32_t>
 Game::move_not_empty_cell(vertex &vrtx,
-                          std::vector<std::vector<bool> > &lst_in_place,
-                          const vertex_coord &src,
-                          const vertex_coord &dst)
-{
+                          std::vector<std::vector<bool>> &lst_in_place,
+                          const vertex_coord &src, const vertex_coord &dst) {
   /*  VD_UP = 0,  VD_LEFT,   VD_DOWN,   VD_RIGHT*/
   if (src == dst)
-    return std::vector<int32_t>(); // return nothing, cause src is already in place!
+    return std::vector<int32_t>(); // return nothing, cause src is already in
+                                   // place!
 
   std::vector<int32_t> res;
   std::vector<vertex_coord> src_dst_path = bfs(lst_in_place, src, dst);
   if (src_dst_path.empty())
-    return res; //todo remove after all fixes
+    return res; // todo remove after all fixes
 
   vertex_coord next = src;
   for (auto &pp : src_dst_path) {
     lst_in_place[next.row][next.col] = true;
-    std::vector<vertex_coord> zero_p1_path = bfs(lst_in_place,
-                                                 vrtx.zero_point(),
-                                                 pp);
+    std::vector<vertex_coord> zero_p1_path =
+        bfs(lst_in_place, vrtx.zero_point(), pp);
     lst_in_place[next.row][next.col] = false;
     zero_p1_path.push_back(next);
     auto zero_moves = move_empty_cell(vrtx, zero_p1_path);
@@ -114,9 +108,7 @@ Game::move_not_empty_cell(vertex &vrtx,
 }
 
 std::vector<int32_t>
-Game::move_empty_cell(vertex &vrtx,
-                      const std::vector<vertex_coord> &path)
-{
+Game::move_empty_cell(vertex &vrtx, const std::vector<vertex_coord> &path) {
   std::vector<int32_t> res;
   res.reserve(path.size());
 
@@ -129,7 +121,7 @@ Game::move_empty_cell(vertex &vrtx,
     if (dr != 0 && dc != 0)
       throw std::logic_error("impossible move");
 
-    vertex_move_direction dir;
+    vertex_move_direction dir = VD_UP;
     if (dr != 0) {
       dir = dr > 0 ? VD_UP : VD_DOWN;
     }
@@ -142,8 +134,7 @@ Game::move_empty_cell(vertex &vrtx,
 }
 //////////////////////////////////////////////////////////////
 
-std::vector<int32_t> Game::find_solution_by_strategy()
-{
+std::vector<int32_t> Game::find_solution_by_strategy() {
   if (!has_solution()) {
     return std::vector<int32_t>({0});
   }
@@ -154,15 +145,15 @@ std::vector<int32_t> Game::find_solution_by_strategy()
   for (auto &lip : lst_in_place)
     lip.resize(m_field_size);
 
-  auto append_path_to_res = [this, &vrtx, &res, &lst_in_place](
-      const vertex_coord &src_coord,
-      const vertex_coord &dst_coord,
-      bool set_in_place_flag = true) {
+  auto append_path_to_res = [this, &vrtx, &res,
+                             &lst_in_place](const vertex_coord &src_coord,
+                                            const vertex_coord &dst_coord,
+                                            bool set_in_place_flag = true) {
     std::vector<int32_t> path =
         move_not_empty_cell(vrtx, lst_in_place, src_coord, dst_coord);
     for (auto &pp : path)
       res.push_back(pp);
-//    std::cout << vrtx << std::endl;
+    //    std::cout << vrtx << std::endl;
     lst_in_place[dst_coord.row][dst_coord.col] = set_in_place_flag;
   };
 
@@ -181,32 +172,35 @@ std::vector<int32_t> Game::find_solution_by_strategy()
     // fill last 2 elements
     int c_pen_val = start_val + subfield_size - 2;
     int c_last_val = start_val + subfield_size - 1;
-    vertex_coord dc_pen(n, n + subfield_size - 1); //Place to LAST (top right corner)
+    vertex_coord dc_pen(n, n + subfield_size -
+                               1); // Place to LAST (top right corner)
     vertex_coord cc_pen = vrtx.find_val_coord(c_pen_val);
     vertex_coord cc_last = vrtx.find_val_coord(c_last_val);
-    vertex_coord dc_last(n+1, n + subfield_size - 1); //Place to row+1 under last!
+    vertex_coord dc_last(n + 1,
+                         n + subfield_size - 1); // Place to row+1 under last!
 
     // if top right corner has last value in row - just move it 2 cells down
-    if (cc_last.row == dc_pen.row ||
-        cc_last.col == dc_pen.col ||
-        (cc_last.row == dc_pen.row+1 && cc_last.col == dc_pen.col-1)) { // vrtx(dc_pen) == c_last_val) {
-      vertex_coord tmp_dc_last(dc_pen.row+2, dc_pen.col);
+    if (cc_last.row == dc_pen.row || cc_last.col == dc_pen.col ||
+        (cc_last.row == dc_pen.row + 1 &&
+         cc_last.col == dc_pen.col - 1)) { // vrtx(dc_pen) == c_last_val) {
+      vertex_coord tmp_dc_last(dc_pen.row + 2, dc_pen.col);
       append_path_to_res(cc_last, tmp_dc_last, false);
       cc_pen = vrtx.find_val_coord(c_pen_val);
-    }    
+    }
     append_path_to_res(cc_pen, dc_pen);
     cc_last = vrtx.find_val_coord(c_last_val);
     append_path_to_res(cc_last, dc_last);
 
-    vertex_coord ccz_dst(dc_pen.row, dc_pen.col-1);
-    std::vector<vertex_coord> ccz_path = bfs(lst_in_place, vrtx.zero_point(), ccz_dst);
+    vertex_coord ccz_dst(dc_pen.row, dc_pen.col - 1);
+    std::vector<vertex_coord> ccz_path =
+        bfs(lst_in_place, vrtx.zero_point(), ccz_dst);
     std::vector<int> ccz_moves = move_empty_cell(vrtx, ccz_path);
     for (auto &m : ccz_moves)
       res.push_back(m);
     res.push_back(vrtx.zero_move(VD_RIGHT));
     res.push_back(vrtx.zero_move(VD_DOWN));
     lst_in_place[dc_last.row][dc_last.col] = false;
-//    std::cout << vrtx << std::endl;
+    //    std::cout << vrtx << std::endl;
     /********************************/
 
     // fill dst col
@@ -219,15 +213,18 @@ std::vector<int32_t> Game::find_solution_by_strategy()
 
     int r_pen_val = start_val + (subfield_size - 2) * (m_field_size);
     int r_last_val = start_val + (subfield_size - 1) * (m_field_size);
-    vertex_coord dr_pen(n + subfield_size - 1, n); //Place to LAST (left bottom corner)
+    vertex_coord dr_pen(n + subfield_size - 1,
+                        n); // Place to LAST (left bottom corner)
     vertex_coord cr_pen = vrtx.find_val_coord(r_pen_val);
     vertex_coord cr_last = vrtx.find_val_coord(r_last_val);
-    vertex_coord dr_last(n + subfield_size - 1, n+1); //Place to col+1 right to last!
+    vertex_coord dr_last(n + subfield_size - 1,
+                         n + 1); // Place to col+1 right to last!
 
     // if bottom left corner has last value in col - just move it 2 cells right
     if (cr_last.col == dr_pen.col || cr_last.row == dr_pen.row ||
-        (cr_last.col == dr_pen.col+1 && cr_last.row == dr_pen.row-1)) { // too close
-      vertex_coord tmp_dr_last(dr_pen.row, dr_pen.col+2);
+        (cr_last.col == dr_pen.col + 1 &&
+         cr_last.row == dr_pen.row - 1)) { // too close
+      vertex_coord tmp_dr_last(dr_pen.row, dr_pen.col + 2);
       append_path_to_res(cr_last, tmp_dr_last, false);
       cr_pen = vrtx.find_val_coord(r_pen_val);
     }
@@ -235,20 +232,21 @@ std::vector<int32_t> Game::find_solution_by_strategy()
     cr_last = vrtx.find_val_coord(r_last_val);
     append_path_to_res(cr_last, dr_last);
 
-    vertex_coord crz_dst(dr_pen.row-1, dr_pen.col);
-    std::vector<vertex_coord> crz_path = bfs(lst_in_place, vrtx.zero_point(), crz_dst);
+    vertex_coord crz_dst(dr_pen.row - 1, dr_pen.col);
+    std::vector<vertex_coord> crz_path =
+        bfs(lst_in_place, vrtx.zero_point(), crz_dst);
     std::vector<int> crz_moves = move_empty_cell(vrtx, crz_path);
     for (auto &m : crz_moves)
       res.push_back(m);
     res.push_back(vrtx.zero_move(VD_DOWN));
     res.push_back(vrtx.zero_move(VD_RIGHT));
     lst_in_place[dr_last.row][dr_last.col] = false;
-//    std::cout << vrtx << std::endl;
+    //    std::cout << vrtx << std::endl;
     /********************************/
   }
 
-  const vertex_move_direction move_pattern[] =
-    {VD_UP, VD_RIGHT, VD_DOWN, VD_LEFT};
+  const vertex_move_direction move_pattern[] = {VD_UP, VD_RIGHT, VD_DOWN,
+                                                VD_LEFT};
   int mpi = 0;
   while (!is_goal(vrtx)) {
     res.push_back(vrtx.zero_move(move_pattern[mpi]));

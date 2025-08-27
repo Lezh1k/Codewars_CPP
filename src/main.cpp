@@ -7,6 +7,8 @@
 #include <functional>
 #include <thread>
 
+#include "rot13.cuh"
+
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char *argv[]) {
   testing::InitGoogleTest(&argc, argv);
@@ -59,14 +61,17 @@ struct benchmark {
 //////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
-  using namespace std::chrono;
   (void)argc;
   (void)argv;
+
+  cuda_hello();
+  return 0;
+
   static const std::string pattern =
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
-  const int repeats = 90000000;
+  const int repeats = 100000000;
   const int iterations = 1;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
@@ -176,7 +181,7 @@ int main(int argc, char *argv[]) {
                 }),
   };
 
-  std::cout << "processing text: " << buff_len / (1024*1024) << " MB\n";
+  std::cout << "processing text: " << buff_len / (1024 * 1024) << " MB\n";
 
   for (benchmark &b : benchmarks) {
     func_profiler p(b.m_name);

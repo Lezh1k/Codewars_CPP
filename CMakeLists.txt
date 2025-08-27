@@ -1,6 +1,10 @@
 cmake_minimum_required(VERSION 3.16)
 
-project(CodewarsCPP)            # this sets the project name
+set(CMAKE_CUDA_HOST_COMPILER  g++-14)
+set(CMAKE_C_COMPILER          gcc-14)
+set(CMAKE_CXX_COMPILER        g++-14)
+
+project(CodewarsCPP LANGUAGES CXX CUDA)
 
 ###############################################################################
 ## file globbing ##############################################################
@@ -10,6 +14,10 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
+
+set(CMAKE_CUDA_STANDARD 20)
+set(CMAKE_CUDA_STANDARD_REQUIRED ON)
+set(CMAKE_CUDA_ARCHITECTURES "52;60;61;62;70;75;80;86")
 
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   message("Debug build.")
@@ -23,21 +31,22 @@ endif()
 # These instructions search the directory tree when cmake is
 # invoked and put all files that match the pattern in the variables 
 # `sources` and `data`.
-file(GLOB_RECURSE sources      src/*.cpp inc/*.h)
-file(GLOB_RECURSE sources_test tests/*.cpp)
-file(GLOB_RECURSE data resources/*)
+file(GLOB_RECURSE sources       src/*.cpp src/*.cu inc/*.h inc/*.cuh)
+file(GLOB_RECURSE sources_test  tests/*.cpp)
+file(GLOB_RECURSE data          resources/*)
 # You can use set(sources src/main.cpp) etc if you don't want to
 # use globbing to find files automatically.
 
 find_package( OpenCV REQUIRED )
 include_directories( ${OpenCV_INCLUDE_DIRS} )
 
-find_package(OpenMP)
-if (OPENMP_FOUND)
-    set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
-    set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
-    set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
-endif()
+# find_package(OpenMP)
+# if (OPENMP_FOUND)
+#     set (CMAKE_C_FLAGS "${CMAKE_C_FLAGS} ${OpenMP_C_FLAGS}")
+#     set (CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+#     set (CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} ${OpenMP_EXE_LINKER_FLAGS}")
+# endif()
+
 ###############################################################################
 ## target definitions #########################################################
 ###############################################################################
@@ -50,11 +59,15 @@ add_executable(${PROJECT_NAME} ${sources} ${data})
 target_include_directories(${PROJECT_NAME} PRIVATE inc)
 # Just for ${PROJECT_NAME} add some compiler flags.
 
-set(warning_level -Wall -Wextra -pedantic)
+# set(warning_level -Wall -Wextra -pedantic)
+set(warning_level -Wall -Wextra)
 set(sse_flags -msse -msse2)
 set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2")
 set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
-target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level})
+
+set(CMAKE_CUDA_FLAGS_RELEASE "-pipe -O2")
+set(CMAKE_CUDA_FLAGS_DEBUG "-pipe -O0 -g")
+target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level} ${sse_flags})
 
 # This copies all resource files in the build directory.
 # We need this, because we want to work with paths relative to the executable.
