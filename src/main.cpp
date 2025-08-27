@@ -69,7 +69,7 @@ int main(int argc, char *argv[]) {
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
   const int repeats = 100000000;
-  const int iterations = 3;
+  const int iterations = 2;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
 
@@ -177,9 +177,12 @@ int main(int argc, char *argv[]) {
                   }
                 }),
       benchmark("cuda", [work, buff_len]() { cuda_rot13(work, buff_len); }),
+      benchmark("cuda vect",
+                [work, buff_len]() { cuda_rot13_vect(work, buff_len); }),
   };
 
-  std::cout << "processing text: " << (buff_len / (1024 * 1024)) * repeats << " MB\n";
+  std::cout << "processing text: "
+            << (buff_len / (1024 * 1024 * 1024)) * iterations << " GB\n";
 
   for (benchmark &b : benchmarks) {
     func_profiler p(b.m_name);
