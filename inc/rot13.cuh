@@ -3,7 +3,6 @@
 
 #include <cstddef>
 
-void cuda_hello();
 void cuda_rot13(char *str, size_t n);
 
 #endif

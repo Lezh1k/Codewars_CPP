@@ -179,7 +179,7 @@ int main(int argc, char *argv[]) {
       benchmark("cuda", [work, buff_len]() { cuda_rot13(work, buff_len); }),
   };
 
-  std::cout << "processing text: " << buff_len / (1024 * 1024) << " MB\n";
+  std::cout << "processing text: " << (buff_len / (1024 * 1024)) * repeats << " MB\n";
 
   for (benchmark &b : benchmarks) {
     func_profiler p(b.m_name);

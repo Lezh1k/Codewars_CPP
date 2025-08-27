@@ -1,11 +1,6 @@
 #include "rot13.cuh"
 #include <cstdint>
-#include <stdio.h>
 
-__global__ void __cuda_hello(void) { printf("Hello from cuda\n"); }
-
-void cuda_hello() { __cuda_hello<<<1, 1>>>(); }
-//////////////////////////////////////////////////////////////
 
 __global__ void __cuda_rot13(char *str, size_t n) {
   size_t i = 0;
@@ -22,7 +17,6 @@ void cuda_rot13(char *str, size_t n) {
   char *pd_str;
   cudaMalloc((void **)&pd_str, n);
   cudaMemcpy(pd_str, str, sizeof(char) * n, cudaMemcpyHostToDevice);
-
   __cuda_rot13<<<1, 1>>>(pd_str, n);
   cudaMemcpy(str, pd_str, sizeof(char) * n, cudaMemcpyDeviceToHost);
   cudaFree((void *)pd_str);
