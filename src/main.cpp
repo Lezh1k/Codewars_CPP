@@ -64,15 +64,12 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  cuda_hello();
-  return 0;
-
   static const std::string pattern =
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
   const int repeats = 100000000;
-  const int iterations = 1;
+  const int iterations = 3;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
 
@@ -179,6 +176,7 @@ int main(int argc, char *argv[]) {
                     t.join();
                   }
                 }),
+      benchmark("cuda", [work, buff_len]() { cuda_rot13(work, buff_len); }),
   };
 
   std::cout << "processing text: " << buff_len / (1024 * 1024) << " MB\n";
