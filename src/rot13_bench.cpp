@@ -27,8 +27,8 @@ struct func_profiler {
     auto dur = std::chrono::high_resolution_clock::now() - m_start;
     std::cout
         << m_name << ": "
-        << std::chrono::duration_cast<std::chrono::milliseconds>(dur).count()
-        << " ms.\n";
+        << std::chrono::duration_cast<std::chrono::microseconds>(dur).count()
+        << " µs.\n";
   }
 };
 //////////////////////////////////////////////////////////////
@@ -157,8 +157,8 @@ int rot13_bench_launch(void) {
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
-  const int repeats = 200000000;
-  const int iterations = 2;
+  const int repeats = 150000000;
+  const int iterations = 3;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
 
@@ -200,8 +200,8 @@ int rot13_bench_launch(void) {
   }
 
   std::vector<benchmark> benchmarks = {
-      benchmark("naive",
-                [&work, buff_len]() { rot13_naive(work.get(), buff_len); }),
+      // benchmark("naive",
+      //           [&work, buff_len]() { rot13_naive(work.get(), buff_len); }),
       benchmark("sse",
                 [&work, buff_len]() { rot13_sse(work.get(), buff_len); }),
       benchmark(
@@ -265,10 +265,9 @@ int rot13_bench_launch(void) {
   };
 
   std::cout << "processing text: "
-            << (buff_len / (1024 * 1024 * 1024)) * iterations << " GB\n";
+            << (buff_len / (1024 * 1024 * 1024)) << " GB " << iterations << " times\n";
 
   for (benchmark &b : benchmarks) {
-    func_profiler p(b.m_name);
     for (int i = 0; i < iterations; ++i) {
       // fill work with pattern
       for (size_t offset = 0; offset < buff_len - pattern.size();
@@ -276,7 +275,10 @@ int rot13_bench_launch(void) {
         memcpy(work.get() + offset, pattern.c_str(), pattern.size());
       }
 
-      b.m_func();
+      {
+        func_profiler p(b.m_name);
+        b.m_func();
+      }
 
       // Touch the data so the call can't be optimized out
       // (simple byte sum; not performance-critical)
