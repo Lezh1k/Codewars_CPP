@@ -157,9 +157,8 @@ int rot13_bench_launch(void) {
       "12345 abcdefghijklmnopqrstuvwxyz "
       "ABCDEFGHIJKLMNOPQRSTUVWXYZ 09876 !!! @`[{";
 
-  const int repeats = 50000000;
-  // const int repeats = 2000;
-  const int iterations = 3;
+  const int repeats = 100000000;
+  const int iterations = 4;
   const size_t buff_len = pattern.size() * repeats + 1;
   const size_t cpu_n = std::thread::hardware_concurrency();
 
