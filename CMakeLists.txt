@@ -1,10 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-set(CMAKE_CUDA_HOST_COMPILER  g++-14)
-set(CMAKE_C_COMPILER          gcc-14)
-set(CMAKE_CXX_COMPILER        g++-14)
+# set(CMAKE_CUDA_HOST_COMPILER  g++-14)
+# set(CMAKE_C_COMPILER          gcc-14)
+# set(CMAKE_CXX_COMPILER        g++-14)
 
-project(CodewarsCPP LANGUAGES CXX CUDA)
+# project(CodewarsCPP LANGUAGES CXX CUDA)
+project(CodewarsCPP LANGUAGES CXX)
 
 ###############################################################################
 ## file globbing ##############################################################
@@ -31,7 +32,14 @@ endif()
 # These instructions search the directory tree when cmake is
 # invoked and put all files that match the pattern in the variables 
 # `sources` and `data`.
-file(GLOB_RECURSE sources       src/*.cpp src/*.cu inc/*.h inc/*.cuh)
+
+set(sources 
+  src/main.cpp 
+  src/rot13_bench.cpp 
+  inc/rot13_bench.h
+)
+
+# file(GLOB_RECURSE sources       src/*.cpp src/*.cu inc/*.h inc/*.cuh)
 file(GLOB_RECURSE sources_test  tests/*.cpp)
 file(GLOB_RECURSE data          resources/*)
 # You can use set(sources src/main.cpp) etc if you don't want to
@@ -61,8 +69,8 @@ target_include_directories(${PROJECT_NAME} PRIVATE inc)
 
 # set(warning_level -Wall -Wextra -pedantic)
 set(warning_level -Wall -Wextra)
-set(sse_flags -msse -msse2)
-set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2")
+set(sse_flags -msse -msse2 -mavx2)
+set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2 -march=native -mtune=native")
 set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
 
 set(CMAKE_CUDA_FLAGS_RELEASE "-pipe -O2")
