@@ -305,22 +305,19 @@ void rot13_avx2(char *str, size_t n) {
 void rot13_avx512(char *str, size_t n) {
   assert(str);
   assert(n);
-  // Constants
-  const __m512i msk_20 = _mm512_set1_epi8(0x20); // to lowercase via OR
+  const __m512i msk_20 = _mm512_set1_epi8(0x20); 
   const __m512i msk_a = _mm512_set1_epi8('a');
   const __m512i msk_z = _mm512_set1_epi8('z');
-  const __m512i msk_n = _mm512_set1_epi8('n'); // 'm'+1
+  const __m512i msk_n = _mm512_set1_epi8('n');
   const __m512i msk_13 = _mm512_set1_epi8(13);
   const __m512i msk_26 = _mm512_set1_epi8(26);
 
-  // Align to 64B for aligned loads/stores
   uintptr_t p_str = (uintptr_t)str;
   uintptr_t p_aligned = (p_str + 63) & ~((uintptr_t)63);
 
   char *s = str;
   size_t i = 0;
 
-  // Scalar head until 64B alignment (or end)
   for (; s != (char *)p_aligned && i < n; ++s, ++i) {
     *s = rot13(*s);
   }
