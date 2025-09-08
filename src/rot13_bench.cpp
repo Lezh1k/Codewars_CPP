@@ -1,5 +1,6 @@
 #include "rot13_bench.h"
 
+#include <assert.h>
 #include <cstring>
 #include <emmintrin.h>
 #include <immintrin.h>
@@ -22,6 +23,7 @@ static void rot13_lut(char *str, size_t n);
 static void rot13_sse(char *str, size_t n);
 static void rot13_sse_prefetch(char *str, size_t n);
 static void rot13_avx2(char *str, size_t n);
+static void rot13_avx512(char *str, size_t n);
 
 struct func_profiler {
   std::string m_name;
@@ -270,36 +272,73 @@ void rot13_avx2(char *str, size_t n) {
   const __m256i msk_26 = _mm256_set1_epi8(26);
   const __m256i msk_00 = _mm256_setzero_si256();
   const __m256i msk_ff = _mm256_cmpeq_epi8(msk_00, msk_00);
-
   uintptr_t p_str = (uintptr_t)str;
   uintptr_t p_aligned = (p_str + 31) & ~((uintptr_t)31);
-
   char *s = str;
   size_t i = 0;
   for (; s != (char *)p_aligned && i < n; ++s, ++i) {
     *s = rot13(*s);
   }
-
   for (; i + 32 <= n; s += 32, i += 32) {
     __m256i orig = _mm256_load_si256((__m256i *)s);
     __m256i lower_case = _mm256_or_si256(orig, msk_20);
     __m256i gt_a = _mm256_cmpgt_epi8(msk_a, lower_case);
     gt_a = _mm256_xor_si256(gt_a, msk_ff);
     __m256i le_z = _mm256_cmpgt_epi8(msk_z, lower_case);
-
     __m256i is_alpha = _mm256_and_si256(gt_a, le_z);
     __m256i lower_alphas = _mm256_and_si256(is_alpha, lower_case);
     __m256i gt_m = _mm256_cmpgt_epi8(msk_m, lower_alphas);
     gt_m = _mm256_xor_si256(gt_m, msk_ff);
     gt_m = _mm256_and_si256(gt_m, is_alpha);
-
     __m256i off_1 = _mm256_and_si256(msk_13, is_alpha);
     __m256i off_2 = _mm256_and_si256(msk_26, gt_m);
-
     orig = _mm256_add_epi8(orig, off_1);
     orig = _mm256_sub_epi8(orig, off_2);
-
     _mm256_store_si256((__m256i *)s, orig);
+  }
+  for (; i < n; ++s, ++i) {
+    *s = rot13(*s);
+  }
+}
+//////////////////////////////////////////////////////////////
+
+void rot13_avx512(char *str, size_t n) {
+  assert(str);
+  assert(n);
+  // Constants
+  const __m512i msk_20 = _mm512_set1_epi8(0x20); // to lowercase via OR
+  const __m512i msk_a = _mm512_set1_epi8('a');
+  const __m512i msk_z = _mm512_set1_epi8('z');
+  const __m512i msk_n = _mm512_set1_epi8('n'); // 'm'+1
+  const __m512i msk_13 = _mm512_set1_epi8(13);
+  const __m512i msk_26 = _mm512_set1_epi8(26);
+
+  // Align to 64B for aligned loads/stores
+  uintptr_t p_str = (uintptr_t)str;
+  uintptr_t p_aligned = (p_str + 63) & ~((uintptr_t)63);
+
+  char *s = str;
+  size_t i = 0;
+
+  // Scalar head until 64B alignment (or end)
+  for (; s != (char *)p_aligned && i < n; ++s, ++i) {
+    *s = rot13(*s);
+  }
+
+  for (; i + 64 <= n; s += 64, i += 64) {
+    __m512i orig = _mm512_load_si512((__m512i const *)s);
+    __m512i lower_case = _mm512_or_si512(orig, msk_20);
+
+    __mmask64 ge_a = _mm512_cmp_epi8_mask(lower_case, msk_a, _MM_CMPINT_GE);
+    __mmask64 le_z = _mm512_cmp_epi8_mask(lower_case, msk_z, _MM_CMPINT_LE);
+    __mmask64 is_alpha = ge_a & le_z;
+
+    __mmask64 ge_n = _mm512_cmp_epi8_mask(lower_case, msk_n, _MM_CMPINT_GE);
+    __mmask64 wrap_mask = is_alpha & ge_n;
+
+    __m512i tmp = _mm512_mask_add_epi8(orig, is_alpha, orig, msk_13);
+    __m512i res = _mm512_mask_sub_epi8(tmp, wrap_mask, tmp, msk_26);
+    _mm512_store_si512((__m512i *)s, res);
   }
 
   for (; i < n; ++s, ++i) {
@@ -400,7 +439,7 @@ int rot13_bench_launch(void) {
                 [&work, buff_len]() { rot13_naive(work.get(), buff_len); }),
       benchmark("naive opt1",
                 [&work, buff_len]() { rot13_opt1(work.get(), buff_len); }),
-      benchmark("naive lut",
+      benchmark("lut",
                 [&work, buff_len]() { rot13_lut(work.get(), buff_len); }),
       benchmark("sse",
                 [&work, buff_len]() { rot13_sse(work.get(), buff_len); }),
@@ -409,6 +448,8 @@ int rot13_bench_launch(void) {
           [&work, buff_len]() { rot13_sse_prefetch(work.get(), buff_len); }),
       benchmark("avx",
                 [&work, buff_len]() { rot13_avx2(work.get(), buff_len); }),
+      // benchmark("avx512",
+      //           [&work, buff_len]() { rot13_avx512(work.get(), buff_len); }),
       benchmark("naive parallel",
                 [&work, &lst_naive_batch_size, &lst_naive_batch_offset]() {
                   run_in_parallel([&work, &lst_naive_batch_offset,
@@ -425,7 +466,7 @@ int rot13_bench_launch(void) {
                                lst_naive_batch_size[i]);
                   });
                 }),
-      benchmark("naive lut parallel",
+      benchmark("lut parallel",
                 [&work, &lst_naive_batch_size, &lst_naive_batch_offset]() {
                   run_in_parallel([&work, &lst_naive_batch_offset,
                                    &lst_naive_batch_size](size_t i) {
@@ -457,11 +498,10 @@ int rot13_bench_launch(void) {
                                lst_avx_batch_size[i]);
                   });
                 }),
-      // benchmark("cuda",
-      //           [&work, buff_len]() { cuda_rot13(work.get(), buff_len); }),
-      // benchmark("cuda vect",
-      //           [&work, buff_len]() { cuda_rot13_vect(work.get(), buff_len);
-      //           }),
+      benchmark("cuda",
+                [&work, buff_len]() { cuda_rot13(work.get(), buff_len); }),
+      benchmark("cuda vect",
+                [&work, buff_len]() { cuda_rot13_vect(work.get(), buff_len); }),
   };
 
   std::cout << "processing text: " << (buff_len / (1024 * 1024 * 1024))

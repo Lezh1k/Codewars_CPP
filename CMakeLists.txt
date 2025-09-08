@@ -1,11 +1,11 @@
 cmake_minimum_required(VERSION 3.16)
 
-# set(CMAKE_CUDA_HOST_COMPILER  g++-14)
-# set(CMAKE_C_COMPILER          gcc-14)
-# set(CMAKE_CXX_COMPILER        g++-14)
+set(CMAKE_CUDA_HOST_COMPILER  g++-14)
+set(CMAKE_C_COMPILER          gcc-14)
+set(CMAKE_CXX_COMPILER        g++-14)
 
-# project(CodewarsCPP LANGUAGES CXX CUDA)
-project(CodewarsCPP LANGUAGES CXX)
+project(CodewarsCPP LANGUAGES CXX CUDA)
+# project(CodewarsCPP LANGUAGES CXX)
 
 ###############################################################################
 ## file globbing ##############################################################
@@ -20,6 +20,8 @@ set(CMAKE_CUDA_STANDARD 20)
 set(CMAKE_CUDA_STANDARD_REQUIRED ON)
 set(CMAKE_CUDA_ARCHITECTURES "52;60;61;62;70;75;80;86")
 
+set(AVX512_ENABLED 0)
+
 if(CMAKE_BUILD_TYPE MATCHES Debug)
   message("Debug build.")
 elseif(CMAKE_BUILD_TYPE MATCHES Release)
@@ -33,13 +35,7 @@ endif()
 # invoked and put all files that match the pattern in the variables 
 # `sources` and `data`.
 
-set(sources 
-  src/main.cpp 
-  src/rot13_bench.cpp 
-  inc/rot13_bench.h
-)
-
-# file(GLOB_RECURSE sources       src/*.cpp src/*.cu inc/*.h inc/*.cuh)
+file(GLOB_RECURSE sources       src/*.cpp src/*.cu inc/*.h inc/*.cuh)
 file(GLOB_RECURSE sources_test  tests/*.cpp)
 file(GLOB_RECURSE data          resources/*)
 # You can use set(sources src/main.cpp) etc if you don't want to
@@ -69,13 +65,25 @@ target_include_directories(${PROJECT_NAME} PRIVATE inc)
 
 # set(warning_level -Wall -Wextra -pedantic)
 set(warning_level -Wall -Wextra)
-set(sse_flags -msse -msse2 -mavx2)
+set(sse_flags 
+  -msse 
+  -msse2 
+  -mavx2 
+)
+if (${AVX512_ENABLED})
+set(sse_flags 
+  -mavx512vl
+  -mavx512bw
+)
+endif()
+
 set(CMAKE_CXX_FLAGS_RELEASE "-pipe -O2 -march=native -mtune=native")
 set(CMAKE_CXX_FLAGS_DEBUG "-pipe -O0 -g")
 
 set(CMAKE_CUDA_FLAGS_RELEASE "-pipe -O2")
 set(CMAKE_CUDA_FLAGS_DEBUG "-pipe -O0 -g")
-target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level} ${sse_flags})
+set(CDEFS     "-D__AVX512_ENABLED=${AVX512_ENABLED}")
+target_compile_options(${PROJECT_NAME} PUBLIC ${warning_level} ${sse_flags} ${CDEFS})
 
 # This copies all resource files in the build directory.
 # We need this, because we want to work with paths relative to the executable.
