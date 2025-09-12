@@ -1,5 +1,5 @@
 local function save_and_run()
-  vim.cmd([[w]])
+  vim.cmd([[wa]])
   vim.cmd([[belowright split]])
   vim.cmd([[resize -4]])
   vim.cmd([[terminal cmake -B build && cmake --build build -j16 && ./build/CodewarsCPP]])
@@ -11,7 +11,7 @@ local function save_and_debug()
 end
 
 local function save_and_run_unit_tests()
-  vim.cmd([[w]])
+  vim.cmd([[wa]])
   vim.cmd([[belowright split]])
   vim.cmd([[resize -4]])
   vim.cmd([[terminal cmake -B build && cmake --build build -j16 && ./build/unit_tests]])

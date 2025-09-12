@@ -11,6 +11,9 @@ int main_tests(int argc, char *argv[]) {
 //////////////////////////////////////////////////////////////
 
 int main(int argc, char *argv[]) {
+#ifdef _UNIT_TESTS_
+  return main_tests(argc, argv);
+#endif
   (void)argc;
   (void)argv;
   return rot13_bench_launch();
