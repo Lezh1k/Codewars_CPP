@@ -1,6 +1,7 @@
-#include "rot13_bench.h"
 #include <cpuid.h>
 #include <gtest/gtest.h>
+
+#include "strip_comments.h"
 
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char *argv[]) {
@@ -16,6 +17,15 @@ int main(int argc, char *argv[]) {
 #endif
   (void)argc;
   (void)argv;
-  return rot13_bench_launch();
+
+  std::string input("apples, pears # and bananas\n"
+                    "grapes\n"
+                    "bananas !apples\n");
+  std::unordered_set<char> markers = {'#', '!'};
+  std::string output = stripComments(input, markers);
+
+  std::cout << output << "\n";
+
+  return 0;
 }
 //////////////////////////////////////////////////////////////
