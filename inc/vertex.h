@@ -2,7 +2,6 @@
 #define _C_VERTEX_H
 
 #include <cstdint>
-#include <memory>
 #include <vector>
 
 typedef std::vector<std::vector<int>> state_t;

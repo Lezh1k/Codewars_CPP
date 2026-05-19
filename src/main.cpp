@@ -1,7 +1,7 @@
-#include <cpuid.h>
+#include <algorithm>
 #include <gtest/gtest.h>
-
-#include "strip_comments.h"
+#include <iostream>
+#include <vector>
 
 #ifdef _UNIT_TESTS_
 int main_tests(int argc, char *argv[]) {
@@ -18,14 +18,21 @@ int main(int argc, char *argv[]) {
   (void)argc;
   (void)argv;
 
-  std::string input("apples, pears # and bananas\n"
-                    "grapes\n"
-                    "bananas !apples\n");
-  std::unordered_set<char> markers = {'#', '!'};
-  std::string output = stripComments(input, markers);
+  std::vector<int> arr = {1, 2, 0, 3, 4, 0, 5, 8};
 
-  std::cout << output << "\n";
+  for (auto it : arr) {
+    std::cout << it << ' ';
+  }
+  std::cout << std::endl;
 
+  std::fill(
+      std::remove_if(arr.begin(), arr.end(), [](int it) { return it == 0; }),
+      arr.end(), 0);
+
+  for (auto it : arr) {
+    std::cout << it << ' ';
+  }
+  std::cout << std::endl;
   return 0;
 }
 //////////////////////////////////////////////////////////////
